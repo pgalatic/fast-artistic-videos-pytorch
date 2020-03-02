@@ -230,13 +230,12 @@ def warp_frame(img, flow):
 
 def run_next_image(model, img, prev, flow, cert):    
     # Apply some preprocessing before applying optical flow warp
-    usq = torch.FloatTensor(np.swapaxes(img, 0, 2)).unsqueeze(0)
+    usq = torch.FloatTensor(np.swapaxes(prev, 0, 2)).unsqueeze(0)
     usf = torch.FloatTensor(np.swapaxes(flow, 0, 2)).unsqueeze(0)
     
     # Deprocess output before preprocessing, again
-    prev_warped_raw = warp_frame(usq, usf)
-    prev_warped_pre = np.swapaxes(torch.squeeze(prev_warped_raw).detach().numpy(), 0, 2)
-    prev_warped = preprocess(prev_warped_raw)
+    prev_warped_pre = warp_frame(usq, usf)
+    prev_warped = preprocess(np.swapaxes(torch.squeeze(prev_warped_pre).detach().numpy(), 0, 2))
     prev_warped_masked = prev_warped * torch.FloatTensor(cert).expand_as(prev_warped)
     #prev_warped_masked = torch.zeros(prev_warped_masked.shape)
     #cert = torch.zeros(cert.shape)
