@@ -1,12 +1,19 @@
 
 # STD LIB
+import os
 import pdb
+import sys
+import glob
+import pathlib
 
 # EXTERNAL LIB
 import torch
 import torch.nn as nn
 
+from PIL import Image
+
 import cv2
+import flowiz
 import numpy as np
 from functools import reduce
 from torchsummary import summary
@@ -15,6 +22,7 @@ from torchsummary import summary
 
 # CONSTANTS
 VGG_MEAN = [103.939, 116.779, 123.68]
+OUTPUT_FORMAT = 'out-%05d.png'
 
 class LambdaBase(nn.Sequential):
     def __init__(self, fn, *args):
@@ -137,6 +145,16 @@ def get():
 def set(model, weightfile):
     model.load_state_dict(torch.load(weightfile))
 
+def min_filter(img):
+    net = nn.Sequential(
+        Lambda(lambda x: x * -1),
+        Lambda(lambda x: x + 1),
+        nn.MaxPool2d((7, 7), (1, 1), (3, 3)),
+        Lambda(lambda x: x * -1),
+        Lambda(lambda x: x + 1)
+    )
+    return net.forward(img)
+
 def preprocess(img):
     # in: (h, w, 3)
     # out: (1, 3, h, w)
@@ -188,17 +206,72 @@ def run_image(model, img):
     out = model.forward(tmp)
     return deprocess(out)
 
+def warp_frame(img, flow):
+    """Warp an image or feature map with optical flow
+    Args:
+        img (Tensor): size (n, c, h, w)
+        flow (Tensor): size (n, 2, h, w), values range from -1 to 1 (relevant to image width or height)
+
+    Returns:
+        Tensor: warped image or feature map
+    """
+    assert img.size()[-2:] == flow.size()[-2:]
+    n, _, h, w = img.size()
+    x_ = torch.arange(w).view(1, -1).expand(h, -1)
+    y_ = torch.arange(h).view(-1, 1).expand(-1, w)
+    grid = torch.stack([x_, y_], dim=0).float()
+    grid = grid.unsqueeze(0).expand(n, -1, -1, -1)
+    grid[:, 0, :, :] = 2 * grid[:, 0, :, :] / (w - 1) - 1
+    grid[:, 1, :, :] = 2 * grid[:, 1, :, :] / (h - 1) - 1
+    grid += 2 * flow
+    grid = grid.permute(0, 2, 3, 1)
+    out = torch.nn.functional.grid_sample(img, grid, padding_mode='zeros')
+    return out
+
+def run_next_image(model, img, prev, flow, cert):    
+    # Apply some preprocessing before applying optical flow warp
+    usq = torch.FloatTensor(np.swapaxes(img, 0, 2)).unsqueeze(0)
+    usf = torch.FloatTensor(np.swapaxes(flow, 0, 2)).unsqueeze(0)
+    
+    # Deprocess output before preprocessing, again
+    prev_warped_raw = warp_frame(usq, usf)
+    prev_warped_pre = np.swapaxes(torch.squeeze(prev_warped_raw).detach().numpy(), 0, 2)
+    prev_warped = preprocess(prev_warped_raw)
+    prev_warped_masked = prev_warped * torch.FloatTensor(cert).expand_as(prev_warped)
+    #prev_warped_masked = torch.zeros(prev_warped_masked.shape)
+    #cert = torch.zeros(cert.shape)
+        
+    pre = preprocess(img)
+    tmp = torch.cat((pre, prev_warped_masked, cert.unsqueeze(0)), dim=1)
+    out = model.forward(tmp)
+    return deprocess(out)
+
 def main():
     model = get()
     set(model, 'styles/checkpoint_candy_video.pth')
 
-    input_size=(7, 180, 180)
+    #input_size=(7, 180, 180)
     #summary(model, input_size)
+    
+    data = pathlib.Path('data')
+    out = pathlib.Path('out')
+    ppms = [str(data / name) for name in glob.glob1(str(data), '*.ppm')]
 
-    img = cv2.imread('data/frame_00001.ppm')
-    out = run_image(model, img)
-
-    cv2.imwrite('out.png', out)
+    for idx, ppm in enumerate(ppms):
+        if idx == 0:
+            prev = cv2.imread(ppms[idx])
+            out = run_image(model, prev)
+        else:
+            flowfile = str(data / 'backward_{}_{}.flo'.format(idx + 1, idx))
+            certfile = str(data / 'reliable_{}_{}.pgm'.format(idx + 1, idx))
+            assert(os.path.exists(flowfile))
+            assert(os.path.exists(certfile))
+            flow = flowiz.read_flow(flowfile)
+            cert = np.asarray(Image.open(certfile))
+            pre_cert = min_filter(torch.FloatTensor(cert).unsqueeze(0))
+            img = cv2.imread(ppms[idx])
+            out = run_next_image(model, img, prev, flow, pre_cert)
+        cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
 
 if __name__ == '__main__':
     main()
