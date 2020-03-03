@@ -48,7 +48,6 @@ class LambdaReduce(LambdaBase):
 def copy_param(old,new):
     if old.weight is not None: new.weight.data.copy_(old.weight)
     if old.bias is not None: new.bias.data.copy_(old.bias)
-    pdb.set_trace()
     try: 
         new.running_mean.copy_(old.running_mean)
     except AttributeError:
@@ -327,8 +326,8 @@ class LambdaReduce(LambdaBase):
     s = '{}\n\n{} = {}'.format(header,varname,s[:-2])
 
     if outputname is None: outputname=varname
-    with open(outputname+'.py', "w") as pyfile:
-        pyfile.write(s)
+    #with open(outputname+'.py', "w") as pyfile:
+    #    pyfile.write(s)
 
     new = nn.Sequential()
     lua_recursive_model(model,new)
