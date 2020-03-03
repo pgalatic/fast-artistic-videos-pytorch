@@ -215,6 +215,7 @@ def warp_frame(img, flow):
     Returns:
         Tensor: warped image or feature map
     """
+    # This function is WRONG.
     assert img.size()[-2:] == flow.size()[-2:]
     n, _, h, w = img.size()
     x_ = torch.arange(w).view(1, -1).expand(h, -1)
@@ -228,15 +229,18 @@ def warp_frame(img, flow):
     out = torch.nn.functional.grid_sample(img, grid, padding_mode='zeros')
     return out
 
-def run_next_image(model, img, prev, flow, cert):    
+def run_next_image(model, img, prev, flow, cert, idx):    
     # Apply some preprocessing before applying optical flow warp
     usq = torch.FloatTensor(np.swapaxes(prev, 0, 2)).unsqueeze(0)
     usf = torch.FloatTensor(np.swapaxes(flow, 0, 2)).unsqueeze(0)
     
     # Deprocess output before preprocessing, again
     prev_warped_pre = warp_frame(usq, usf)
+    cv2.imwrite('{}_flow.png'.format('out-%05d' % idx), 
+        np.swapaxes(torch.squeeze(prev_warped_pre).detach().numpy(), 0, 2))
     prev_warped = preprocess(np.swapaxes(torch.squeeze(prev_warped_pre).detach().numpy(), 0, 2))
     prev_warped_masked = prev_warped * torch.FloatTensor(cert).expand_as(prev_warped)
+
     #prev_warped_masked = torch.zeros(prev_warped_masked.shape)
     #cert = torch.zeros(cert.shape)
         
@@ -258,18 +262,20 @@ def main():
 
     for idx, ppm in enumerate(ppms):
         if idx == 0:
-            prev = cv2.imread(ppms[idx])
-            out = run_image(model, prev)
+            img = cv2.imread(ppms[idx])
+            out = run_image(model, img)
         else:
             flowfile = str(data / 'backward_{}_{}.flo'.format(idx + 1, idx))
             certfile = str(data / 'reliable_{}_{}.pgm'.format(idx + 1, idx))
             assert(os.path.exists(flowfile))
             assert(os.path.exists(certfile))
+            print('{} + {} + {} -> {}'.format(
+                flowfile, certfile, OUTPUT_FORMAT % idx, OUTPUT_FORMAT % (idx + 1)))
             flow = flowiz.read_flow(flowfile)
-            cert = np.asarray(Image.open(certfile))
-            pre_cert = min_filter(torch.FloatTensor(cert).unsqueeze(0))
+            cert = torch.FloatTensor(np.asarray(Image.open(certfile))).unsqueeze(0)
+            pre_cert = min_filter(cert)
             img = cv2.imread(ppms[idx])
-            out = run_next_image(model, img, prev, flow, pre_cert)
+            out = run_next_image(model, img, out, flow, pre_cert, idx + 1)
         cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
 
 if __name__ == '__main__':
