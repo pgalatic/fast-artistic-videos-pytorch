@@ -1,5 +1,5 @@
 # original: https://github.com/clcarwin/convert_torch_to_pytorch
-
+# Works on torch==0.4.1.post2
 from __future__ import print_function
 
 import os
