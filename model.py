@@ -45,119 +45,11 @@ class Lambda(LambdaBase):
 
 class LambdaMap(LambdaBase):
     def forward(self, input):
-        return list(map(self.lambda_func,self.forward_prepare(input)))
+        return list(map(self.lambda_func, self.forward_prepare(input)))
 
 class LambdaReduce(LambdaBase):
     def forward(self, input):
-        return functools.reduce(self.lambda_func,self.forward_prepare(input))
-
-def get():
-    model = nn.Sequential( # Sequential,
-        nn.ReflectionPad2d((40, 40, 40, 40)),
-        nn.Conv2d(7,32,(9, 9),(1, 1),(4, 4)),
-        nn.InstanceNorm2d(32, affine=True),
-        nn.ReLU(),
-        nn.Conv2d(32,64,(3, 3),(2, 2),(1, 1)),
-        nn.InstanceNorm2d(64, affine=True),
-        nn.ReLU(),
-        nn.Conv2d(64,128,(3, 3),(2, 2),(1, 1)),
-        nn.InstanceNorm2d(128, affine=True),
-        nn.ReLU(),
-        nn.Sequential( # Sequential,
-            LambdaMap(lambda x: x, # ConcatTable,
-                nn.Sequential( # Sequential,
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                    nn.ReLU(),
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                ),
-                nn.ConstantPad2d(-2, 0),
-            ),
-            LambdaReduce(lambda x,y: x+y), # CAddTable,
-        ),
-        nn.Sequential( # Sequential,
-            LambdaMap(lambda x: x, # ConcatTable,
-                nn.Sequential( # Sequential,
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                    nn.ReLU(),
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                ),
-                nn.ConstantPad2d(-2, 0),
-            ),
-            LambdaReduce(lambda x,y: x+y), # CAddTable,
-        ),
-        nn.Sequential( # Sequential,
-            LambdaMap(lambda x: x, # ConcatTable,
-                nn.Sequential( # Sequential,
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                    nn.ReLU(),
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                ),
-                nn.ConstantPad2d(-2, 0),
-            ),
-            LambdaReduce(lambda x,y: x+y), # CAddTable,
-        ),
-        nn.Sequential( # Sequential,
-            LambdaMap(lambda x: x, # ConcatTable,
-                nn.Sequential( # Sequential,
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                    nn.ReLU(),
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                ),
-                nn.ConstantPad2d(-2, 0),
-            ),
-            LambdaReduce(lambda x,y: x+y), # CAddTable,
-        ),
-        nn.Sequential( # Sequential,
-            LambdaMap(lambda x: x, # ConcatTable,
-                nn.Sequential( # Sequential,
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                    nn.ReLU(),
-                    nn.Conv2d(128,128,(3, 3)),
-                    nn.InstanceNorm2d(128, affine=True),
-                ),
-                nn.ConstantPad2d(-2, 0),
-            ),
-            LambdaReduce(lambda x,y: x+y), # CAddTable,
-        ),
-        nn.UpsamplingNearest2d(scale_factor=2),
-        nn.InstanceNorm2d(128, affine=True),
-        nn.ReLU(),
-        nn.Conv2d(128,64,(3, 3),(1, 1),(1, 1)),
-        nn.InstanceNorm2d(64, affine=True),
-        nn.ReLU(),
-        nn.UpsamplingNearest2d(scale_factor=2),
-        nn.InstanceNorm2d(64, affine=True),
-        nn.ReLU(),
-        nn.Conv2d(64,3,(9, 9),(1, 1),(4, 4)),
-        nn.Tanh(),
-        Lambda(lambda x: x * 150),
-        Lambda(lambda x: x), # nn.TotalVariation,
-    )
-
-    model.eval()
-    return model
-
-def set(model, weightfile):
-    model.load_state_dict(torch.load(weightfile))
-
-def min_filter(img):
-    net = nn.Sequential(
-        Lambda(lambda x: x * -1),
-        Lambda(lambda x: x + 1),
-        nn.MaxPool2d((7, 7), (1, 1), (3, 3)),
-        Lambda(lambda x: x * -1),
-        Lambda(lambda x: x + 1)
-    )
-    return net.forward(img)
+        return functools.reduce(self.lambda_func, self.forward_prepare(input))
 
 def preprocess(img):
     # in: (h, w, 3)
@@ -216,69 +108,196 @@ def warp(img, flow):
     out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
     return out
 
-def run_image(model, img):
-    start = time.time()
-    # Preprocess the current input image
-    pre = preprocess(img)
-    # All optical flow fields are blank for the first image
-    blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
-    # Concatenate everything into a tensor of shape (1, 7, height, width)
-    tmp = torch.cat((pre, blanks), dim=1)
-    # Run the tensor through the model
-    out = model.forward(tmp)
-    # Deprocess and return the result
-    dep = deprocess(out)
-    logging.info('Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
-    return dep
+class StylizationModel():
+    def __init__(self, weights_fname=None):
+    
+        # Main stylization network
+        self.model = nn.Sequential( # Sequential,
+            nn.ReflectionPad2d((40, 40, 40, 40)),
+            nn.Conv2d(7,32,(9, 9),(1, 1),(4, 4)),
+            nn.InstanceNorm2d(32, affine=True),
+            nn.ReLU(),
+            nn.Conv2d(32,64,(3, 3),(2, 2),(1, 1)),
+            nn.InstanceNorm2d(64, affine=True),
+            nn.ReLU(),
+            nn.Conv2d(64,128,(3, 3),(2, 2),(1, 1)),
+            nn.InstanceNorm2d(128, affine=True),
+            nn.ReLU(),
+            nn.Sequential( # Sequential,
+                LambdaMap(lambda x: x, # ConcatTable,
+                    nn.Sequential( # Sequential,
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                        nn.ReLU(),
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                    ),
+                    nn.ConstantPad2d(-2, 0),
+                ),
+                LambdaReduce(lambda x,y: x+y), # CAddTable,
+            ),
+            nn.Sequential( # Sequential,
+                LambdaMap(lambda x: x, # ConcatTable,
+                    nn.Sequential( # Sequential,
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                        nn.ReLU(),
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                    ),
+                    nn.ConstantPad2d(-2, 0),
+                ),
+                LambdaReduce(lambda x,y: x+y), # CAddTable,
+            ),
+            nn.Sequential( # Sequential,
+                LambdaMap(lambda x: x, # ConcatTable,
+                    nn.Sequential( # Sequential,
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                        nn.ReLU(),
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                    ),
+                    nn.ConstantPad2d(-2, 0),
+                ),
+                LambdaReduce(lambda x,y: x+y), # CAddTable,
+            ),
+            nn.Sequential( # Sequential,
+                LambdaMap(lambda x: x, # ConcatTable,
+                    nn.Sequential( # Sequential,
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                        nn.ReLU(),
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                    ),
+                    nn.ConstantPad2d(-2, 0),
+                ),
+                LambdaReduce(lambda x,y: x+y), # CAddTable,
+            ),
+            nn.Sequential( # Sequential,
+                LambdaMap(lambda x: x, # ConcatTable,
+                    nn.Sequential( # Sequential,
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                        nn.ReLU(),
+                        nn.Conv2d(128,128,(3, 3)),
+                        nn.InstanceNorm2d(128, affine=True),
+                    ),
+                    nn.ConstantPad2d(-2, 0),
+                ),
+                LambdaReduce(lambda x,y: x+y), # CAddTable,
+            ),
+            nn.UpsamplingNearest2d(scale_factor=2),
+            nn.InstanceNorm2d(128, affine=True),
+            nn.ReLU(),
+            nn.Conv2d(128,64,(3, 3),(1, 1),(1, 1)),
+            nn.InstanceNorm2d(64, affine=True),
+            nn.ReLU(),
+            nn.UpsamplingNearest2d(scale_factor=2),
+            nn.InstanceNorm2d(64, affine=True),
+            nn.ReLU(),
+            nn.Conv2d(64,3,(9, 9),(1, 1),(4, 4)),
+            nn.Tanh(),
+            Lambda(lambda x: x * 150),
+            Lambda(lambda x: x), # nn.TotalVariation,
+        )
+        
+        # Min filter used to limit signal of consistency check
+        self.min_filter = nn.Sequential(
+            Lambda(lambda x: x * -1),
+            Lambda(lambda x: x + 1),
+            nn.MaxPool2d((7, 7), (1, 1), (3, 3)),
+            Lambda(lambda x: x * -1),
+            Lambda(lambda x: x + 1)
+        )
+        
+        self.model.eval()
+        self.min_filter.eval()
+        
+        if weights_fname:
+            self.set(weights_fname)
 
-def run_next_image(model, img, prev, flow, cert):
-    start = time.time()
-    # Warp the previous output with the optical flow between the new image and previous image
-    prev_warped_pre = warp(prev, flow)
-    # Apply preprocessing to the warped image
-    prev_warped = preprocess(prev_warped_pre)
-    # Mask the warped image with the consistency check
-    prev_warped_masked = prev_warped * torch.FloatTensor(cert).expand_as(prev_warped)
-    # Preprocess the current input image
-    pre = preprocess(img)
-    # Concatenate everything into a tensor of shape (1, 7, height, width)
-    tmp = torch.cat((pre, prev_warped_masked, cert.unsqueeze(0)), dim=1)
-    # Run the tensor through the model
-    out = model.forward(tmp)
-    # Deprocess and return the result
-    dep = deprocess(out)
-    logging.info('Elapsed time for stylizing frame: {}'.format(round(time.time() - start, 3)))
-    return dep
+    def _run_image(self, img):
+        start = time.time()
+        # Preprocess the current input image
+        pre = preprocess(img)
+        # All optical flow fields are blank for the first image
+        blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
+        # Concatenate everything into a tensor of shape (1, 7, height, width)
+        tmp = torch.cat((pre, blanks), dim=1)
+        # Run the tensor through the model
+        out = self.model.forward(tmp)
+        # Deprocess and return the result
+        dep = deprocess(out)
+        logging.info(
+            'Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
+        return dep
+
+    def _run_next_image(self, img, prev, flow, cert):
+        start = time.time()
+        # Apply min filter to consistency check
+        pre_cert = self.min_filter.forward(cert)
+        # Warp the previous output with the optical flow between the new image and previous image
+        prev_warped_pre = warp(prev, flow)
+        # Apply preprocessing to the warped image
+        prev_warped = preprocess(prev_warped_pre)
+        # Mask the warped image with the consistency check
+        prev_warped_masked = prev_warped * torch.FloatTensor(pre_cert).expand_as(prev_warped)
+        # Preprocess the current input image
+        pre = preprocess(img)
+        # Concatenate everything into a tensor of shape (1, 7, height, width)
+        tmp = torch.cat((pre, prev_warped_masked, pre_cert.unsqueeze(0)), dim=1)
+        # Run the tensor through the model
+        out = self.model.forward(tmp)
+        # Deprocess and return the result
+        dep = deprocess(out)
+        logging.info(
+            'Elapsed time for stylizing frame: {}'.format(round(time.time() - start, 3)))
+        return dep
+
+    def set(self, weights_fname):
+        self.model.load_state_dict(torch.load(weights_fname))
+
+    def stylize(self, framefiles, flowfiles, certfiles):
+        for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
+            img = cv2.imread(framefile)
+            assert(os.path.exists(framefile))
+            
+            if idx == 0:
+                # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
+                out = self._run_image(img)
+            else:
+                assert(os.path.exists(flowfile))
+                assert(os.path.exists(certfile))
+                # Flow shape is (2, h, w), range is [0-1]
+                flow = flowiz.read_flow(flowfile)
+                # Cert shape is (1, h, w), range is [0-1]
+                cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
+                out = self._run_next_image(img, out, flow, cert)
+            
+            cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
 
 def main():
     logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
-    model = get()
-    set(model, 'styles/schlief.pth')
+    model = StylizationModel('styles/schlief.pth')
 
     #input_size=(7, 180, 180)
     #summary(model, input_size)
     
     data = pathlib.Path('data')
-    ppms = [str(data / name) for name in glob.glob1(str(data), '*.ppm')]
-
-    for idx, ppm in enumerate(ppms):
-        if idx == 0:
-            img = cv2.imread(ppms[idx])
-            out = run_image(model, img)
-        else:
-            flowfile = str(data / 'backward_{}_{}.flo'.format(idx + 1, idx))
-            certfile = str(data / 'reliable_{}_{}.pgm'.format(idx + 1, idx))
-            assert(os.path.exists(flowfile))
-            assert(os.path.exists(certfile))
-            flow = flowiz.read_flow(flowfile)
-            cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
-            pre_cert = min_filter(cert)
-            img = cv2.imread(ppms[idx])
-            out = run_next_image(model, img, out, flow, pre_cert)
-        
-        cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
+    # Gather all the frames for stylization
+    frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])
+    # First flow/cert doesn't exist, so use None as a placeholder
+    flows = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')])
+    certs = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')])
+    # Sanity checks
+    assert(len(frames) > 0 and len(flows) > 0 and len(certs) > 0 
+            and len(frames) == len(flows) and len(flows) == len(certs))
+    
+    model.stylize(frames, flows, certs)
 
 if __name__ == '__main__':
     main()
