@@ -331,7 +331,7 @@ class LambdaReduce(LambdaBase):
 
     new = nn.Sequential()
     lua_recursive_model(model,new)
-    torch.save(new.state_dict(),outputname+'.pth')
+    torch.save(new.state_dict(), outputname)
 
 
 parser = argparse.ArgumentParser(description='Convert torch t7 model to pytorch')

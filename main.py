@@ -1,4 +1,3 @@
-
 # STD LIB
 import os
 import pdb
@@ -18,38 +17,9 @@ from PIL import Image
 import cv2
 import flowiz
 import numpy as np
-#from torchsummary import summary
 
 # LOCAL LIB
-
-# CONSTANTS
-VGG_MEAN = [103.939, 116.779, 123.68]
-OUTPUT_FORMAT = 'out-%05d.png'
-LOGFILE = 'thesis.log'
-LOGFORMAT = '%(asctime)s %(name)s:%(levelname)s -- %(message)s'
-
-class LambdaBase(nn.Sequential):
-    def __init__(self, fn, *args):
-        super(LambdaBase, self).__init__(*args)
-        self.lambda_func = fn
-
-    def forward_prepare(self, input):
-        output = []
-        for module in self._modules.values():
-            output.append(module(input))
-        return output if output else input
-
-class Lambda(LambdaBase):
-    def forward(self, input):
-        return self.lambda_func(self.forward_prepare(input))
-
-class LambdaMap(LambdaBase):
-    def forward(self, input):
-        return list(map(self.lambda_func, self.forward_prepare(input)))
-
-class LambdaReduce(LambdaBase):
-    def forward(self, input):
-        return functools.reduce(self.lambda_func, self.forward_prepare(input))
+from const import *
 
 def preprocess(img):
     # in: (h, w, 3)
@@ -107,6 +77,45 @@ def warp(img, flow):
     flow[:, :, 1] += np.arange(height)[:, np.newaxis]
     out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
     return out
+
+class LambdaBase(nn.Sequential):
+    def __init__(self, fn, *args):
+        super(LambdaBase, self).__init__(*args)
+        self.lambda_func = fn
+
+    def forward_prepare(self, input):
+        output = []
+        for module in self._modules.values():
+            output.append(module(input))
+        return output if output else input
+
+class Lambda(LambdaBase):
+    def forward(self, input):
+        return self.lambda_func(self.forward_prepare(input))
+
+class LambdaMap(LambdaBase):
+    def forward(self, input):
+        return list(map(self.lambda_func, self.forward_prepare(input)))
+
+class LambdaReduce(LambdaBase):
+    def forward(self, input):
+        return functools.reduce(self.lambda_func, self.forward_prepare(input))
+        
+class Interpolate(nn.Module):
+    '''
+    As UpsamplingNearest2d is deprecated, yet still important to include as part of the sequential model,
+    this class serves as a workaround.
+    '''
+    def __init__(self, size=None, scale_factor=None, mode='nearest', align_corners=None):
+        super(Interpolate, self).__init__()
+        self.size = size
+        self.scale_factor = scale_factor
+        self.mode = mode
+        self.align_corners = align_corners
+        
+    def forward(self, x):
+        return nn.functional.interpolate(x, 
+            size=self.size, scale_factor=self.scale_factor, mode=self.mode, align_corners=self.align_corners)
 
 class StylizationModel():
     def __init__(self, weights_fname=None):
@@ -188,13 +197,13 @@ class StylizationModel():
                 ),
                 LambdaReduce(lambda x,y: x+y), # CAddTable,
             ),
-            nn.UpsamplingNearest2d(scale_factor=2),
+            Interpolate(scale_factor=2),
             nn.InstanceNorm2d(128, affine=True),
             nn.ReLU(),
             nn.Conv2d(128,64,(3, 3),(1, 1),(1, 1)),
             nn.InstanceNorm2d(64, affine=True),
             nn.ReLU(),
-            nn.UpsamplingNearest2d(scale_factor=2),
+            Interpolate(scale_factor=2),
             nn.InstanceNorm2d(64, affine=True),
             nn.ReLU(),
             nn.Conv2d(64,3,(9, 9),(1, 1),(4, 4)),
@@ -278,26 +287,4 @@ class StylizationModel():
             
             cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
 
-def main():
-    logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
-    model = StylizationModel('styles/schlief.pth')
-
-    #input_size=(7, 180, 180)
-    #summary(model, input_size)
-    
-    data = pathlib.Path('data')
-    # Gather all the frames for stylization
-    frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])
-    # First flow/cert doesn't exist, so use None as a placeholder
-    flows = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')])
-    certs = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')])
-    # Sanity checks
-    assert(len(frames) > 0 and len(flows) > 0 and len(certs) > 0 
-            and len(frames) == len(flows) and len(flows) == len(certs))
-    
-    model.stylize(frames, flows, certs)
-
-if __name__ == '__main__':
-    main()
