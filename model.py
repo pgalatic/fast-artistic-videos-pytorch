@@ -4,7 +4,10 @@ import os
 import pdb
 import sys
 import glob
+import time
+import logging
 import pathlib
+import functools
 
 # EXTERNAL LIB
 import torch
@@ -15,14 +18,15 @@ from PIL import Image
 import cv2
 import flowiz
 import numpy as np
-from functools import reduce
-from torchsummary import summary
+#from torchsummary import summary
 
 # LOCAL LIB
 
 # CONSTANTS
 VGG_MEAN = [103.939, 116.779, 123.68]
 OUTPUT_FORMAT = 'out-%05d.png'
+LOGFILE = 'thesis.log'
+LOGFORMAT = '%(asctime)s %(name)s:%(levelname)s -- %(message)s'
 
 class LambdaBase(nn.Sequential):
     def __init__(self, fn, *args):
@@ -45,7 +49,7 @@ class LambdaMap(LambdaBase):
 
 class LambdaReduce(LambdaBase):
     def forward(self, input):
-        return reduce(self.lambda_func,self.forward_prepare(input))
+        return functools.reduce(self.lambda_func,self.forward_prepare(input))
 
 def get():
     model = nn.Sequential( # Sequential,
@@ -161,11 +165,11 @@ def preprocess(img):
     assert(len(img.shape) == 3)
     assert(img.shape[2] == 3)
     
-    # Swap RGB to BGR
-    bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    # Swap RGB to BGR (this appears unnecessary)
+    #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     
     # Swap axes
-    tmp = np.swapaxes(bgr, 0, 2)
+    tmp = np.swapaxes(img, 0, 2)
     
     # Unsqueeze
     usq = torch.Tensor(tmp).unsqueeze(0)
@@ -193,66 +197,65 @@ def deprocess(img):
     tmp = np.swapaxes(sqz, 0, 2)
     
     # Swap BGR to RGB (this appears unnecessary)
-    #rgb = cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB)
+    # rgb = cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB)
     
     return tmp
 
+def warp(img, flow):
+    '''
+    Warp an image or feature map with optical flow
+    Args:
+        img (np.ndarray): shape (3, h, w), values range from 0 to 255
+        flow (np.ndarray): shape (2, h, w), values range from -1 to 1
+    Returns:
+        Tensor: warped image or feature map
+    '''
+    height, width = flow.shape[:2]
+    flow[:, :, 0] += np.arange(width)
+    flow[:, :, 1] += np.arange(height)[:, np.newaxis]
+    out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
+    return out
+
 def run_image(model, img):
-    height, width = img.shape[0], img.shape[1]
+    start = time.time()
+    # Preprocess the current input image
     pre = preprocess(img)
     # All optical flow fields are blank for the first image
     blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
+    # Concatenate everything into a tensor of shape (1, 7, height, width)
     tmp = torch.cat((pre, blanks), dim=1)
+    # Run the tensor through the model
     out = model.forward(tmp)
-    return deprocess(out)
+    # Deprocess and return the result
+    dep = deprocess(out)
+    logging.info('Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
+    return dep
 
-def warp_frame(img, flow):
-    """Warp an image or feature map with optical flow
-    Args:
-        img (Tensor): size (n, c, h, w)
-        flow (Tensor): size (n, 2, h, w), values range from -1 to 1 (relevant to image width or height)
-
-    Returns:
-        Tensor: warped image or feature map
-    """
-    # This function is WRONG.
-    assert img.size()[-2:] == flow.size()[-2:]
-    n, _, h, w = img.size()
-    x_ = torch.arange(w).view(1, -1).expand(h, -1)
-    y_ = torch.arange(h).view(-1, 1).expand(-1, w)
-    grid = torch.stack([x_, y_], dim=0).float()
-    grid = grid.unsqueeze(0).expand(n, -1, -1, -1)
-    grid[:, 0, :, :] = 2 * grid[:, 0, :, :] / (w - 1) - 1
-    grid[:, 1, :, :] = 2 * grid[:, 1, :, :] / (h - 1) - 1
-    grid += 2 * flow
-    grid = grid.permute(0, 2, 3, 1)
-    out = torch.nn.functional.grid_sample(img, grid, padding_mode='zeros')
-    return out
-
-def run_next_image(model, img, prev, flow, cert, idx):    
-    # Apply some preprocessing before applying optical flow warp
-    usq = torch.FloatTensor(np.swapaxes(prev, 0, 2)).unsqueeze(0)
-    usf = torch.FloatTensor(np.swapaxes(flow, 0, 2)).unsqueeze(0)
-    
-    # Deprocess output before preprocessing, again
-    # prev_warped_pre = warp_frame(usq, usf)
-    prev_warped_pre = cv2.imread('flow_{}.png'.format(idx))
-    #cv2.imwrite('{}_flow.png'.format('out-%05d' % idx), 
-    #    np.swapaxes(torch.squeeze(prev_warped_pre).detach().numpy(), 0, 2))
+def run_next_image(model, img, prev, flow, cert):
+    start = time.time()
+    # Warp the previous output with the optical flow between the new image and previous image
+    prev_warped_pre = warp(prev, flow)
+    # Apply preprocessing to the warped image
     prev_warped = preprocess(prev_warped_pre)
+    # Mask the warped image with the consistency check
     prev_warped_masked = prev_warped * torch.FloatTensor(cert).expand_as(prev_warped)
-
-    #prev_warped_masked = torch.zeros(prev_warped_masked.shape)
-    #cert = torch.zeros(cert.shape)
-        
+    # Preprocess the current input image
     pre = preprocess(img)
-    tmp = torch.cat((pre, prev_warped, cert.unsqueeze(0)), dim=1)
+    # Concatenate everything into a tensor of shape (1, 7, height, width)
+    tmp = torch.cat((pre, prev_warped_masked, cert.unsqueeze(0)), dim=1)
+    # Run the tensor through the model
     out = model.forward(tmp)
-    return deprocess(out)
+    # Deprocess and return the result
+    dep = deprocess(out)
+    logging.info('Elapsed time for stylizing frame: {}'.format(round(time.time() - start, 3)))
+    return dep
 
 def main():
+    logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+
     model = get()
-    set(model, 'styles/candy.pth')
+    set(model, 'styles/schlief.pth')
 
     #input_size=(7, 180, 180)
     #summary(model, input_size)
@@ -269,13 +272,12 @@ def main():
             certfile = str(data / 'reliable_{}_{}.pgm'.format(idx + 1, idx))
             assert(os.path.exists(flowfile))
             assert(os.path.exists(certfile))
-            print('{} + {} + {} -> {}'.format(
-                flowfile, certfile, OUTPUT_FORMAT % idx, OUTPUT_FORMAT % (idx + 1)))
             flow = flowiz.read_flow(flowfile)
             cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
             pre_cert = min_filter(cert)
             img = cv2.imread(ppms[idx])
-            out = run_next_image(model, img, out, flow, pre_cert, idx + 1)
+            out = run_next_image(model, img, out, flow, pre_cert)
+        
         cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
 
 if __name__ == '__main__':
