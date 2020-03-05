@@ -1,4 +1,5 @@
 # STD LIB
+import re
 import os
 import pdb
 import sys
@@ -268,7 +269,7 @@ class StylizationModel():
     def set(self, weights_fname):
         self.model.load_state_dict(torch.load(weights_fname))
 
-    def stylize(self, framefiles, flowfiles, certfiles):
+    def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
             img = cv2.imread(framefile)
             assert(os.path.exists(framefile))
@@ -285,6 +286,7 @@ class StylizationModel():
                 cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
                 out = self._run_next_image(img, out, flow, cert)
             
-            cv2.imwrite(OUTPUT_FORMAT % (idx + 1), out)
-
-
+            idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
+            out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
+            logging.info('Writing to {}...'.format(out_fname))
+            cv2.imwrite(out_fname, out)
