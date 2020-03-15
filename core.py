@@ -8,6 +8,7 @@ import time
 import logging
 import pathlib
 import functools
+import threading
 
 # EXTERNAL LIB
 import torch
@@ -230,14 +231,14 @@ class StylizationModel():
 
     def run_next_image(self, img, prev, flow, cert):
         start = time.time()
-        # Apply min filter to consistency check
-        pre_cert = self.min_filter.forward(cert)
+        # Consistency check preprocessing: Apply min filter and swap axes
+        pre_cert = self.min_filter.forward(cert).view((1, cert.shape[1], cert.shape[0]))
         # Warp the previous output with the optical flow between the new image and previous image
         prev_warped_pre = warp(prev, flow)
         # Apply preprocessing to the warped image
         prev_warped = preprocess(prev_warped_pre)
         # Mask the warped image with the consistency check
-        prev_warped_masked = prev_warped * torch.FloatTensor(pre_cert).expand_as(prev_warped)
+        prev_warped_masked = prev_warped * pre_cert.expand_as(prev_warped)
         # Preprocess the current input image
         pre = preprocess(img)
         # Concatenate everything into a tensor of shape (1, 7, height, width)
@@ -275,6 +276,7 @@ class StylizationModel():
 
     def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
+            # img shape is (h, w, 3), range is [0-255], uint8
             img = cv2.imread(framefile)
             assert(os.path.exists(framefile))
             
@@ -284,13 +286,14 @@ class StylizationModel():
             else:
                 assert(os.path.exists(flowfile))
                 assert(os.path.exists(certfile))
-                # Flow shape is (2, h, w), range is [0-1]
+                # flow shape is (h, w, 2), range is [0-1], float32
                 flow = flowiz.read_flow(flowfile)
-                # Cert shape is (1, h, w), range is [0-1]
-                cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
+                # cert shape is (h, w, 1), range is [0 | 1], binary
+                cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(-1)
                 out = self.run_next_image(img, out, flow, cert)
             
             idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
             out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
             logging.info('Writing to {}...'.format(out_fname))
-            cv2.imwrite(out_fname, out)
+            # Spawn a thread to save the image
+            threading.Thread(target=cv2.imwrite, args=(out_fname, out)).start()
