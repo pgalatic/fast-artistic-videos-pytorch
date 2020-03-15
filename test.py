@@ -13,7 +13,7 @@ import argparse
 
 # LOCAL LIB
 from .const import *
-import main
+import core
 
 def parse_args():
     '''Parses arguments.'''
@@ -32,7 +32,7 @@ if __name__ == '__main__':
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
     data = pathlib.Path(args.src_dir)
-    model = main.StylizationModel(args.style)
+    model = core.StylizationModel(args.style)
     
     # Gather all the frames for stylization
     frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])

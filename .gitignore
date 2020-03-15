@@ -1,7 +1,9 @@
 *.t7
 *.pdf
-videos/
-core/consistencyChecker/consistencyChecker
+styles/
+consistencyChecker/consistencyChecker
+deepmatching-static
+deepflow2-static
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

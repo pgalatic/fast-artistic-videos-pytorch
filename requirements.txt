@@ -1,0 +1,4 @@
+torch==1.4.0
+flowiz==2.3.1
+numpy==1.16.2
+Pillow==7.0.0
