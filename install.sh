@@ -5,8 +5,10 @@ sudo apt-get -y update
 sudo apt-get -y install ffmpeg
 sudo apt-get -y install python3
 sudo apt-get -y install python3-pip
+pip3 install --upgrade pip
 pip3 install -r requirements.txt
 pip3 install gdown
+pip3 install opencv-python
 
 # Download Deepmatching and Deepflow
 wget https://thoth.inrialpes.fr/src/deepmatching/code/deepmatching_1.2.2.zip

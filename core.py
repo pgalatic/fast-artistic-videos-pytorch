@@ -226,9 +226,9 @@ class StylizationModel():
         self.min_filter.eval()
         
         if weights_fname:
-            self.set(weights_fname)
+            self.set_fname(weights_fname)
 
-    def _run_next_image(self, img, prev, flow, cert):
+    def run_next_image(self, img, prev, flow, cert):
         start = time.time()
         # Apply min filter to consistency check
         pre_cert = self.min_filter.forward(cert)
@@ -280,7 +280,7 @@ class StylizationModel():
             
             if idx == 0:
                 # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
-                out = self._run_image(img)
+                out = self.run_image(img)
             else:
                 assert(os.path.exists(flowfile))
                 assert(os.path.exists(certfile))
@@ -288,7 +288,7 @@ class StylizationModel():
                 flow = flowiz.read_flow(flowfile)
                 # Cert shape is (1, h, w), range is [0-1]
                 cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(0)
-                out = self._run_next_image(img, out, flow, cert)
+                out = self.run_next_image(img, out, flow, cert)
             
             idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
             out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
