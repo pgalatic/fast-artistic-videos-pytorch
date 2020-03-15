@@ -14,6 +14,7 @@ import threading
 import torch
 import torch.nn as nn
 
+# PIL and cv2 read images differently -- cv2.imread() != PIL.Image.open()
 from PIL import Image
 
 import cv2
@@ -65,7 +66,45 @@ def deprocess(img):
     
     return tmp
 
-def warp(img, flow):
+#warp using scipy
+def warp(im, flow):
+    """
+    Use optical flow to warp image to the next
+    :param im: image to warp
+    :param flow: optical flow
+    :return: warped image
+    """
+    from scipy import interpolate
+    image_height = im.shape[0]
+    image_width = im.shape[1]
+    flow_height = flow.shape[0]
+    flow_width = flow.shape[1]
+    n = image_height * image_width
+    (iy, ix) = np.mgrid[0:image_height, 0:image_width]
+    (fy, fx) = np.mgrid[0:flow_height, 0:flow_width]
+    fx = fx.astype(np.float64)
+    fy = fy.astype(np.float64)
+    fx += flow[:,:,0]
+    fy += flow[:,:,1]
+    mask = np.logical_or(fx <0 , fx > flow_width)
+    mask = np.logical_or(mask, fy < 0)
+    mask = np.logical_or(mask, fy > flow_height)
+    fx = np.minimum(np.maximum(fx, 0), flow_width)
+    fy = np.minimum(np.maximum(fy, 0), flow_height)
+    points = np.concatenate((ix.reshape(n,1), iy.reshape(n,1)), axis=1)
+    xi = np.concatenate((fx.reshape(n, 1), fy.reshape(n,1)), axis=1)
+    warp = np.zeros((image_height, image_width, im.shape[2]))
+    for i in range(im.shape[2]):
+        channel = im[:, :, i]
+        values = channel.reshape(n, 1)
+        new_channel = interpolate.griddata(points, values, xi, method='cubic')
+        new_channel = np.reshape(new_channel, [flow_height, flow_width])
+        new_channel[mask] = 1
+        warp[:, :, i] = new_channel.astype(np.uint8)
+
+    return warp.astype(np.uint8)
+
+def warp2(img, flow):
     '''
     Warp an image or feature map with optical flow
     Args:
@@ -234,7 +273,7 @@ class StylizationModel():
         # Consistency check preprocessing: Apply min filter and swap axes
         pre_cert = self.min_filter.forward(torch.FloatTensor(cert).unsqueeze(0))
         # Warp the previous output with the optical flow between the new image and previous image
-        prev_warped_pre = warp(prev, flow)
+        prev_warped_pre = warp2(prev, flow)
         # Apply preprocessing to the warped image
         prev_warped = preprocess(prev_warped_pre)
         # Mask the warped image with the consistency check
@@ -279,7 +318,9 @@ class StylizationModel():
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
             # img shape is (h, w, 3), range is [0-255], uint8
             assert(os.path.exists(framefile))
-            img = cv2.imread(framefile)
+            img = np.asarray(Image.open(framefile), dtype=np.uint8)
+            # img = cv2.imread(framefile)
+            # PIL is RGB; CV2 is BGR
             
             if idx == 0:
                 # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
@@ -289,12 +330,14 @@ class StylizationModel():
                 assert(os.path.exists(certfile))
                 # flow shape is (h, w, 2), range is [0-1], float32
                 flow = flowiz.read_flow(flowfile)
-                # cert shape is (h, w, 1), range is [0-1], float32
-                cert = np.swapaxes(np.asarray(Image.open(certfile)), 0, 1) / 255
+                # cert shape is (h, w, 1), range is [0 | 255], float32
+                cert = np.asarray(Image.open(certfile), dtype=np.uint8) / 255
+                # cert = cv2.imread(certfile, cv2.IMREAD_UNCHANGED)
                 out = self.run_next_image(img, out, flow, cert)
             
+            # Spawn a thread to save the image TODO
             idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
             out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
             logging.info('Writing to {}...'.format(out_fname))
-            # Spawn a thread to save the image
-            threading.Thread(target=cv2.imwrite, args=(out_fname, out)).start()
+            cv2.imwrite(out_fname, out)
+            
