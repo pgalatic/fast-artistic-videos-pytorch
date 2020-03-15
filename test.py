@@ -12,7 +12,7 @@ import argparse
 # EXTERNAL LIB
 
 # LOCAL LIB
-from const import *
+from .const import *
 import main
 
 def parse_args():

@@ -20,7 +20,7 @@ import flowiz
 import numpy as np
 
 # LOCAL LIB
-from const import *
+from .const import *
 
 def preprocess(img):
     # in: (h, w, 3)
@@ -228,22 +228,6 @@ class StylizationModel():
         if weights_fname:
             self.set(weights_fname)
 
-    def _run_image(self, img):
-        start = time.time()
-        # Preprocess the current input image
-        pre = preprocess(img)
-        # All optical flow fields are blank for the first image
-        blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
-        # Concatenate everything into a tensor of shape (1, 7, height, width)
-        tmp = torch.cat((pre, blanks), dim=1)
-        # Run the tensor through the model
-        out = self.model.forward(tmp)
-        # Deprocess and return the result
-        dep = deprocess(out)
-        logging.info(
-            'Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
-        return dep
-
     def _run_next_image(self, img, prev, flow, cert):
         start = time.time()
         # Apply min filter to consistency check
@@ -265,9 +249,29 @@ class StylizationModel():
         logging.info(
             'Elapsed time for stylizing frame: {}'.format(round(time.time() - start, 3)))
         return dep
+    
+    def run_image(self, img):
+        start = time.time()
+        # Preprocess the current input image
+        pre = preprocess(img)
+        # All optical flow fields are blank for the first image
+        blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
+        # Concatenate everything into a tensor of shape (1, 7, height, width)
+        tmp = torch.cat((pre, blanks), dim=1)
+        # Run the tensor through the model
+        out = self.model.forward(tmp)
+        # Deprocess and return the result
+        dep = deprocess(out)
+        logging.info(
+            'Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
+        return dep
 
-    def set(self, weights_fname):
+    def set_fname(self, weights_fname):
         self.model.load_state_dict(torch.load(weights_fname))
+    
+    def set_weights(self, weights):
+        # Assumes torch.load() has already been called
+        self.model.load_state_dict(weights)
 
     def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
