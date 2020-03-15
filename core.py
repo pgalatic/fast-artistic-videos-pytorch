@@ -232,7 +232,7 @@ class StylizationModel():
     def run_next_image(self, img, prev, flow, cert):
         start = time.time()
         # Consistency check preprocessing: Apply min filter and swap axes
-        pre_cert = self.min_filter.forward(cert).view((1, cert.shape[1], cert.shape[0]))
+        pre_cert = self.min_filter.forward(torch.FloatTensor(cert).unsqueeze(0))
         # Warp the previous output with the optical flow between the new image and previous image
         prev_warped_pre = warp(prev, flow)
         # Apply preprocessing to the warped image
@@ -275,10 +275,11 @@ class StylizationModel():
         self.model.load_state_dict(weights)
 
     def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
+        # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
             # img shape is (h, w, 3), range is [0-255], uint8
-            img = cv2.imread(framefile)
             assert(os.path.exists(framefile))
+            img = cv2.imread(framefile)
             
             if idx == 0:
                 # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
@@ -288,8 +289,8 @@ class StylizationModel():
                 assert(os.path.exists(certfile))
                 # flow shape is (h, w, 2), range is [0-1], float32
                 flow = flowiz.read_flow(flowfile)
-                # cert shape is (h, w, 1), range is [0 | 1], binary
-                cert = torch.FloatTensor(np.asarray(Image.open(certfile)) / 255).unsqueeze(-1)
+                # cert shape is (h, w, 1), range is [0-1], float32
+                cert = np.swapaxes(np.asarray(Image.open(certfile)), 0, 1) / 255
                 out = self.run_next_image(img, out, flow, cert)
             
             idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
