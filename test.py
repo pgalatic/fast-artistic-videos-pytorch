@@ -3,6 +3,7 @@
 # Program to
 
 # STD LIB
+import pdb
 import sys
 import glob
 import logging
@@ -12,7 +13,7 @@ import argparse
 # EXTERNAL LIB
 
 # LOCAL LIB
-from .const import *
+from const import *
 import core
 
 def parse_args():
@@ -37,8 +38,10 @@ if __name__ == '__main__':
     # Gather all the frames for stylization
     frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])
     # First flow/cert doesn't exist, so use None as a placeholder
-    flows = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')])
-    certs = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')])
+    flows = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')],
+        key=lambda x: len(x) if x else -1)
+    certs = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')],
+        key=lambda x: len(x) if x else -1)
     # Sanity checks
     assert(len(frames) > 0 and len(flows) > 0 and len(certs) > 0 
             and len(frames) == len(flows) and len(flows) == len(certs))
