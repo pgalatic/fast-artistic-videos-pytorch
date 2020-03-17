@@ -4,14 +4,10 @@ from __future__ import print_function
 
 import os
 import pdb
-import math
 import torch
 import argparse
-import numpy as np
 import torch.nn as nn
-import torch.optim as optim
 import torch.legacy.nn as lnn
-import torch.nn.functional as F
 
 from functools import reduce
 from torch.autograd import Variable
@@ -64,7 +60,6 @@ def add_submodule(seq, *args):
 def lua_recursive_model(module,seq):
     for old in module.modules:
         name = type(old).__name__
-        real = old
         if name == 'TorchObject':
             name = old._typename.replace('cudnn.','')
             old = old._obj
@@ -181,7 +176,6 @@ def lua_recursive_source(module):
     s = []
     for old in module.modules:
         name = type(old).__name__
-        real = old
         if name == 'TorchObject':
             name = old._typename.replace('cudnn.','')
             old = old._obj
@@ -255,7 +249,6 @@ def lua_recursive_source(module):
         elif name == 'CAddTable':
             s += ['LambdaReduce(lambda x,y: x+y), # CAddTable']
         elif name == 'Concat':
-            dim = old.dimension
             s += ['LambdaReduce(lambda x,y,dim={}: torch.cat((x,y),dim), # Concat'.format(old.dimension)]
             s += lua_recursive_source(old)
             s += [')']

@@ -7,13 +7,10 @@
 import re
 import os
 import pdb
-import sys
-import glob
 import time
 import logging
 import pathlib
 import functools
-import threading
 
 # EXTERNAL LIB
 import torch
@@ -290,6 +287,7 @@ class StylizationModel():
             else:
                 assert(os.path.exists(flowfile))
                 assert(os.path.exists(certfile))
+                logging.info('Using: {} {}'.format(flowfile, certfile))
                 # flow shape is (h, w, 2), range is [0-1], float32
                 flow = flowiz.read_flow(flowfile)
                 # cert shape is (h, w, 1), range is [0 | 255], float32
