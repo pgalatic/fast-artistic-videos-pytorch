@@ -27,6 +27,10 @@ def parse_args():
     
     return ap.parse_args()
 
+def doublesort(fnames):
+    # END. ME.
+    return sorted(sorted(fnames), key=lambda y: len(y) if y else -1)
+
 if __name__ == '__main__':
     args = parse_args()
     logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
@@ -38,10 +42,8 @@ if __name__ == '__main__':
     # Gather all the frames for stylization
     frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])
     # First flow/cert doesn't exist, so use None as a placeholder
-    flows = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')],
-        key=lambda x: len(x) if x else -1)
-    certs = [None] + sorted([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')],
-        key=lambda x: len(x) if x else -1)
+    flows = [None] + doublesort([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')])
+    certs = [None] + doublesort([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')])
     # Sanity checks
     assert(len(frames) > 0 and len(flows) > 0 and len(certs) > 0 
             and len(frames) == len(flows) and len(flows) == len(certs))
