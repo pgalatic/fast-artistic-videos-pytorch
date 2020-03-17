@@ -34,7 +34,6 @@ def preprocess(img):
     
     # Swap RGB to BGR (this appears unnecessary as cv2 is already BGR)
     #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    
     # Swap axes
     tmp = np.swapaxes(img, 0, 2)
     
@@ -251,7 +250,7 @@ class StylizationModel():
     def run_next_image(self, img, prev, flow, cert):
         start = time.time()
         # Consistency check preprocessing: Apply min filter and swap axes
-        pre_cert = self.min_filter.forward(torch.FloatTensor(cert).unsqueeze(0).unsqueeze(0)) / 255
+        pre_cert = self.min_filter.forward(torch.FloatTensor(np.swapaxes(cert / 255, 0, 1)).unsqueeze(0).unsqueeze(0))
         # Warp the previous output with the optical flow between the new image and previous image
         prev_warped = warp(prev, flow)
         # Apply preprocessing to the warped image
@@ -279,7 +278,6 @@ class StylizationModel():
         self.model.load_state_dict(weights)
 
     def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
-        out_dir = '../test/test_out/out'
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
             # img shape is (h, w, 3), range is [0-255], uint8
