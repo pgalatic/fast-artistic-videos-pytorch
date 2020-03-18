@@ -287,7 +287,7 @@ class StylizationModel():
             else:
                 assert(os.path.exists(flowfile))
                 assert(os.path.exists(certfile))
-                logging.info('Using: {} {}'.format(flowfile, certfile))
+                logging.debug('Using: {} {}'.format(flowfile, certfile))
                 # flow shape is (h, w, 2), range is [0-1], float32
                 flow = flowiz.read_flow(flowfile)
                 # cert shape is (h, w, 1), range is [0 | 255], float32
@@ -295,7 +295,6 @@ class StylizationModel():
                 # out shape is (h, w, 3), range is [0-255], float32
                 out = self.run_next_image(img, out, flow, cert)
             
-            # Spawn a thread to save the image TODO
             idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
             out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
             logging.info('Writing to {}...'.format(out_fname))
