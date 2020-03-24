@@ -24,6 +24,10 @@ def parse_args():
         help='The directory from which to source .ppm images, .flo flow files, and .pgm consistency checks.')
     ap.add_argument('style',
         help='The full path to the pyTorch style model.')
+        
+    # Optional arguments
+    ap.add_argument('eval_fname', nargs='?', default=None,
+        help='The path to the style image used for evaluating the model. Specifying this activates evaluation.')
     
     return ap.parse_args()
 
@@ -37,7 +41,7 @@ if __name__ == '__main__':
     logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
     data = pathlib.Path(args.src_dir)
-    model = core.StylizationModel(args.style)
+    model = core.StylizationModel(args.style, args.eval_fname)
     
     # Gather all the frames for stylization
     frames = sorted([str(data / name) for name in glob.glob1(str(data), '*.ppm')])
@@ -45,6 +49,7 @@ if __name__ == '__main__':
     flows = [None] + doublesort([str(data / name) for name in glob.glob1(str(data), 'backward*.flo')])
     certs = [None] + doublesort([str(data / name) for name in glob.glob1(str(data), 'reliable*.pgm')])
     # Sanity checks
+    logging.debug('frame:\t{}\tflows:\t{}\tcerts:\t{}'.format(len(frames), len(flows), len(certs)))
     assert(len(frames) > 0 and len(flows) > 0 and len(certs) > 0 
             and len(frames) == len(flows) and len(flows) == len(certs))
     
