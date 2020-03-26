@@ -23,7 +23,7 @@ import numpy as np
 try:
     import loss
     import common
-except ModuleNotFoundError:
+except:
     from . import loss
     from . import common
 from const import *
