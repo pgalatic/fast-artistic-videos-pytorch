@@ -20,8 +20,12 @@ import flowiz
 import numpy as np
 
 # LOCAL LIB
-import loss
-import common
+try:
+    import loss
+    import common
+except ModuleNotFoundError:
+    from . import loss
+    from . import common
 from const import *
 
 class LambdaBase(nn.Sequential):
