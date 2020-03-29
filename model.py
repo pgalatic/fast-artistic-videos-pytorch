@@ -239,6 +239,11 @@ class StylizationModel():
         threading.Thread(target=optflow.optflow, args=(start, frames, remote)).start()
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, fname in enumerate(frames):
+            out_fname = str(remote / (OUTPUT_FORMAT % (idx + start + 1)))
+            # Skip files we'v
+            if os.path.exists(out_fname):
+                out = cv2.imread(out_fname)
+                continue
             # img shape is (h, w, 3), range is [0-255], uint8
             img = cv2.imread(fname)
             
@@ -261,8 +266,6 @@ class StylizationModel():
                 os.remove(certname)
             os.remove(fname)
             
-            idy = int(re.findall(r'\d+', os.path.basename(fname))[0])
-            out_fname = str(remote / (OUTPUT_FORMAT % (idy)))
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)
             pout = out

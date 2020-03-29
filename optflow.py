@@ -31,7 +31,7 @@ def most_recent_optflo(remote):
         # If it doesn't exist, then there are no optflow files, and we start from scratch.
         return 1
 
-    # The most recent frame is the most recent placeholder plus 1.
+    # The most recent optflow is the most recent placeholder plus 1.
     placeholders = glob.glob1(str(remote), 'frame_*.plc')
     if len(placeholders) == 0: return 1
     
