@@ -240,10 +240,6 @@ class StylizationModel():
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, fname in enumerate(frames):
             out_fname = str(remote / (OUTPUT_FORMAT % (idx + start + 1)))
-            # Skip files we'v
-            if os.path.exists(out_fname):
-                out = cv2.imread(out_fname)
-                continue
             # img shape is (h, w, 3), range is [0-255], uint8
             img = cv2.imread(fname)
             
@@ -255,16 +251,24 @@ class StylizationModel():
                 flowname = str(remote / 'backward_{}_{}.flo'.format(idx + start + 1, idx + start))
                 certname = str(remote / 'reliable_{}_{}.pgm'.format(idx + start + 1, idx + start))
                 # flow shape is (h, w, 2)
-                flow = flowiz.read_flow(common.wait_for(flowname))
+                while True:
+                    try:
+                        flow = flowiz.read_flow(common.wait_for(flowname))
+                        break
+                    except ValueError:
+                        time.sleep(1) # It hasn't finished writing to disk yet
                 # cert shape is (h, w, 1)
                 cert = cv2.imread(common.wait_for(certname), cv2.IMREAD_UNCHANGED)
+                while cert is None:
+                    time.sleep(1)
+                    cert = cv2.imread(common.wait_for(certname), cv2.IMREAD_UNCHANGED)
                 # out shape is (h, w, 3)
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
                 # Remove unnecessary files to save space.
                 os.remove(flowname)
                 os.remove(certname)
-            os.remove(fname)
+                # os.remove(fname) FIXME Removing .ppm files early may be buggy.
             
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)
