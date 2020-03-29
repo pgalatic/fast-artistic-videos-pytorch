@@ -22,10 +22,14 @@ import cv2
 import numpy as np
 
 # LOCAL LIB
-import common
-from const import *
+try:
+    import styutils
+    from const import *
+except:
+    from . import styutils
+    from .const import *
 
-def most_recent_optflo(remote):
+def most_recent_optflow(remote):
     # Check to see if the optical flow folder exists.
     if not os.path.isdir(str(remote)):
         # If it doesn't exist, then there are no optflow files, and we start from scratch.
@@ -83,24 +87,25 @@ def farneback(start_name, end_name, forward_name, backward_name):
     write_flow(forward_name, forward)
     write_flow(backward_name, backward)
 
-def deepflow(start_name, end_name, forward_name, backward_name, downsamp_factor='2'):
+def deepflow(start_name, end_name, forward_name, backward_name):
     # Compute forward optical flow.
+    root = pathlib.Path(__file__).parent.absolute()
     forward_dm = subprocess.Popen([
-        './core/deepmatching-static', start_name, end_name, '-nt', '0', '-downscale', downsamp_factor
+        str('.' / root / DEEPMATCHING), start_name, end_name, '-nt', '0', '-downscale', '2'
     ], stdout=subprocess.PIPE)
     subprocess.run([
-        './core/deepflow2-static', start_name, end_name, forward_name, '-match'
+        str('.' / root / DEEPFLOW2), start_name, end_name, forward_name, '-match'
     ], stdin=forward_dm.stdout)
     
     # Compute backward optical flow.
     backward_dm = subprocess.Popen([
-        './core/deepmatching-static', end_name, start_name, '-nt', '0', '-downscale', downsamp_factor
+        str('.' / root / DEEPMATCHING), end_name, start_name, '-nt', '0', '-downscale', '2'
     ], stdout=subprocess.PIPE)
     subprocess.run([
-        './core/deepflow2-static', end_name, start_name, backward_name, '-match'
+        str('.' / root / DEEPFLOW2), end_name, start_name, backward_name, '-match'
     ], stdin=backward_dm.stdout)
 
-def run_job(idx, start_name, end_name, remote, fast=False):
+def run_job(idx, start_name, end_name, remote, fast):
     logging.info('Computing optical flow for job {}.'.format(idx))
     
     forward_name = str(remote / 'forward_{}_{}.flo'.format(idx, idx+1))
@@ -112,16 +117,18 @@ def run_job(idx, start_name, end_name, remote, fast=False):
     else:
         deepflow(start_name, end_name, forward_name, backward_name)
     
+    # The absolute path accounts for if this file is being run as part of a submodule.
+    root = pathlib.Path(__file__).parent.absolute()
     # Compute consistency check for backwards optical flow.
     subprocess.run([
-        './core/consistencyChecker/consistencyChecker',
+        str('.' / root / CONSISTENCY_CHECK),
         backward_name, forward_name, reliable_name, end_name
     ])
     
     # Remove forward optical flow to save space, as it is only needed for the consistency check.
     os.remove(forward_name)
 
-def optflow(start, frames, remote):
+def optflow(start, frames, remote, fast=False):
     logging.info('Starting optical flow calculations...')
         
     running = []
@@ -136,7 +143,7 @@ def optflow(start, frames, remote):
         if start_name:
             # Spawn a thread to complete that job, then get the next one.
             running.append(threading.Thread(target=run_job, 
-                args=(idx + 1, start_name, end_name, remote)))
+                args=(idx + 1, start_name, end_name, remote, fast)))
             running[-1].start()
     
     # Join all remaining threads.
@@ -156,12 +163,14 @@ def parse_args():
     # Optional arguments
     ap.add_argument('--test', action='store_true',
         help='Compute optical flow over only a few frames to test functionality.')
+    ap.add_argument('--fast', action='store_true',
+        help='Use Farneback optical flow, which is faster than the default, DeepFlow2.')
     
     return ap.parse_args()
 
 def main():
     args = parse_args()
-    common.start_logging()
+    styutils.start_logging()
     
     remote = pathlib.Path(args.remote)
     
@@ -169,7 +178,7 @@ def main():
     if args.test:
         frames = frames[:NUM_FRAMES_FOR_TEST]
     
-    optflow(frames, remote)
+    optflow(0, frames, remote, args.fast)
 
 if __name__ == '__main__':
     main()

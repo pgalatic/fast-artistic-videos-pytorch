@@ -1,6 +1,7 @@
 *.t7
 *.pdf
 styles/
+out/
 consistencyChecker/consistencyChecker
 deepmatching-static
 deepflow2-static

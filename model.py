@@ -2,7 +2,6 @@
 #
 
 # STD LIB
-import re
 import os
 import pdb
 import time
@@ -22,12 +21,12 @@ import numpy as np
 # LOCAL LIB
 try:
     import loss
-    import common
+    import styutils
     import optflow
     from const import *
 except:
     from . import loss
-    from . import common
+    from . import styutils
     from . import optflow
     from .const import *
 
@@ -188,7 +187,7 @@ class StylizationModel():
     def run_image(self, img):
         start = time.time()
         # Preprocess the current input image
-        pre = common.preprocess(img)
+        pre = styutils.preprocess(img)
         # All optical flow fields are blank for the first image
         blanks = torch.zeros((1, 4, pre.shape[-2], pre.shape[-1]))
         # Concatenate everything into a tensor of shape (1, 7, height, width)
@@ -196,7 +195,7 @@ class StylizationModel():
         # Run the tensor through the model
         out = self.model.forward(tmp)
         # Deprocess and return the result
-        dep = common.deprocess(out)
+        dep = styutils.deprocess(out)
         logging.info(
             'Elapsed time for stylizing frame independently: {}'.format(round(time.time() - start, 3)))
         return dep
@@ -204,13 +203,13 @@ class StylizationModel():
     def run_next_image(self, img, prev, flow, cert):
         start = time.time()
         # Preprocess the current input image
-        pre = common.preprocess(img)
+        pre = styutils.preprocess(img)
         # Consistency check preprocessing: Apply min filter and swap axes
         pre_cert = self.min_filter.forward(torch.FloatTensor(np.swapaxes(cert / 255, 0, 1)).unsqueeze(0).unsqueeze(0))
         # Warp the previous output with the optical flow between the new image and previous image
-        prev_warped = common.warp(prev, flow)
+        prev_warped = styutils.warp(prev, flow)
         # Apply preprocessing to the warped image
-        prev_warped_pre = common.preprocess(prev_warped)
+        prev_warped_pre = styutils.preprocess(prev_warped)
         # Mask the warped image with the consistency check
         prev_warped_masked = prev_warped_pre * pre_cert.expand_as(prev_warped_pre)
         # Concatenate everything into a tensor of shape (1, 7, height, width)
@@ -218,7 +217,7 @@ class StylizationModel():
         # Run the tensor through the model
         out = self.model.forward(tmp)
         # Deprocess and return the result
-        dep = common.deprocess(out)
+        dep = styutils.deprocess(out)
         logging.info(
             'Elapsed time for stylizing frame: {}'.format(round(time.time() - start, 3)))
         # round output to prevent drifting over time
@@ -233,10 +232,10 @@ class StylizationModel():
         self.model.load_state_dict(weights)
         logging.info('...Weights loaded.')
 
-    def stylize(self, start, frames, remote):
+    def stylize(self, start, frames, remote, fast):
         crit = None
         if self.eval: crit = loss.StyleTransferVideoLoss(self.style_fname)
-        threading.Thread(target=optflow.optflow, args=(start, frames, remote)).start()
+        threading.Thread(target=optflow.optflow, args=(start, frames, remote, fast)).start()
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, fname in enumerate(frames):
             out_fname = str(remote / (OUTPUT_FORMAT % (idx + start + 1)))
@@ -253,22 +252,21 @@ class StylizationModel():
                 # flow shape is (h, w, 2)
                 while True:
                     try:
-                        flow = flowiz.read_flow(common.wait_for(flowname))
+                        flow = flowiz.read_flow(styutils.wait_for(flowname))
                         break
                     except ValueError:
                         time.sleep(1) # It hasn't finished writing to disk yet
                 # cert shape is (h, w, 1)
-                cert = cv2.imread(common.wait_for(certname), cv2.IMREAD_UNCHANGED)
+                cert = cv2.imread(styutils.wait_for(certname), cv2.IMREAD_UNCHANGED)
                 while cert is None:
                     time.sleep(1)
-                    cert = cv2.imread(common.wait_for(certname), cv2.IMREAD_UNCHANGED)
+                    cert = cv2.imread(styutils.wait_for(certname), cv2.IMREAD_UNCHANGED)
                 # out shape is (h, w, 3)
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
                 # Remove unnecessary files to save space.
                 os.remove(flowname)
                 os.remove(certname)
-                # os.remove(fname) FIXME Removing .ppm files early may be buggy.
             
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)

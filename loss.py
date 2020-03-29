@@ -13,7 +13,10 @@ import cv2
 import numpy as np
 
 # LOCAL LIB
-import common
+try:
+    import styutils
+except:
+    from . import styutils
 
 class Vgg16(torch.nn.Module):
     # Source: https://github.com/pytorch/examples/blob/master/fast_neural_style/neural_style/vgg.py
@@ -54,7 +57,7 @@ class StyleTransferVideoLoss():
         style_img = cv2.imread(style_fname)
 
         self.vgg = Vgg16(requires_grad=False)
-        style_features = self.vgg(common.preprocess(style_img))
+        style_features = self.vgg(styutils.preprocess(style_img))
         self.style_gram = [self.gram_matrix(feature) for feature in style_features]
         self.mse_loss = nn.MSELoss()
     
@@ -66,8 +69,8 @@ class StyleTransferVideoLoss():
         return gram
 
     def eval(self, img, out, multi=None):
-        img_features = self.vgg(common.preprocess(img))
-        out_features = self.vgg(common.preprocess(out))
+        img_features = self.vgg(styutils.preprocess(img))
+        out_features = self.vgg(styutils.preprocess(out))
         
         content_loss = self.mse_loss(img_features.relu2_2, out_features.relu2_2)
         
@@ -80,7 +83,7 @@ class StyleTransferVideoLoss():
         if multi:
             prev, flow, cert = multi
             pre_cert = torch.FloatTensor(np.swapaxes(cert / 255, 0, 1)).unsqueeze(0).unsqueeze(0)
-            prev_warped = torch.FloatTensor(np.swapaxes(common.warp(prev, flow), 0, 2)).unsqueeze(0)
+            prev_warped = torch.FloatTensor(np.swapaxes(styutils.warp(prev, flow), 0, 2)).unsqueeze(0)
             # The masked portions do not influence the temporal loss.
             # FIXME: Is it a bug that the pre_cert does not use the min filter?
             prev_warped_masked = prev_warped * pre_cert.expand_as(prev_warped)

@@ -1,6 +1,8 @@
 
 # STD LIB
 import os
+import sys
+import glob
 import time
 import logging
 
@@ -12,6 +14,14 @@ import numpy as np
 
 # LOCAL LIB
 from const import *
+
+def start_logging():
+    '''
+    Begins Python's logging capabilities in a default configuration. Logs are appended to a 
+    logfile, and all logs are also printed to console.
+    '''
+    logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
+    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 def preprocess(img):
     # in: (h, w, 3)
@@ -68,6 +78,36 @@ def warp(img, flow):
     out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
     return out
 
+def count_files(dir, extension):
+    '''
+    given:
+        dir         -> (pathlib.Path) a directory
+        extension   -> (str) an extention (.png, .ppm, etc)
+    
+    returns:
+        (int) the number of files in dir that end in that extention
+    '''
+    return len(glob.glob1(str(dir), '*{}'.format(extension)))
+
+def makedirs(dirname):
+    '''
+    given:
+        dirname -> (pathlib.Path) the path to a directory
+    
+    attempts to create the directory, accounting for various situations when such an attempt will 
+        fail
+    '''
+    # Convert from pathlib.Path to string if necessary.
+    dirname = str(dirname)
+    if not os.path.isdir(dirname):
+        try:
+            os.makedirs(dirname)
+        except FileExistsError:
+            pass # The directory was created just before we tried to create it.
+        except PermissionError:
+            logging.warning('Directory {} creation failed! Are you sure that the common folder is accessible/mounted?'.format(dirname))
+            raise
+
 def wait_for(fname):
     '''
     given:
@@ -77,7 +117,7 @@ def wait_for(fname):
         measures are used to account for that
     '''
     # If you wish upon a star...
-    logging.info('Waiting for {}...'.format(fname))
+    logging.debug('Waiting for {}...'.format(fname))
     while not os.path.exists(fname):
         time.sleep(1)
     logging.debug('...{} found!'.format(fname))
