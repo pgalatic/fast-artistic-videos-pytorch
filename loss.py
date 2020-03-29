@@ -14,7 +14,6 @@ import numpy as np
 
 # LOCAL LIB
 import common
-from const import *
 
 class Vgg16(torch.nn.Module):
     # Source: https://github.com/pytorch/examples/blob/master/fast_neural_style/neural_style/vgg.py
@@ -88,6 +87,8 @@ class StyleTransferVideoLoss():
             out_masked = torch.FloatTensor(np.swapaxes(out, 0, 2)) * pre_cert.expand_as(prev_warped)
             temporal_loss = self.mse_loss(prev_warped_masked, out_masked)
         
-        logging.info('CONTENT:\t{}\tSTYLE:\t{}\tTEMPORAL:\t{}'.format(
+        logging.debug('CONTENT:\t{}\tSTYLE:\t{}\tTEMPORAL:\t{}'.format(
             content_loss, style_loss, temporal_loss))
-        return content_loss + style_loss + temporal_loss
+        score = content_loss + style_loss + temporal_loss
+        logging.info('Loss:\t{}'.format(score))
+        return 

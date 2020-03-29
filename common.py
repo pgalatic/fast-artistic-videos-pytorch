@@ -1,5 +1,8 @@
 
 # STD LIB
+import os
+import time
+import logging
 
 # EXTERNAL LIB
 import torch
@@ -65,3 +68,17 @@ def warp(img, flow):
     out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
     return out
 
+def wait_for(fname):
+    '''
+    given:
+        fname -> (str) a filename
+    
+    halts the program until that file exists. NOTE: the file might not yet be complete, and other
+        measures are used to account for that
+    '''
+    # If you wish upon a star...
+    logging.debug('Waiting for {}...'.format(fname))
+    while not os.path.exists(fname):
+        time.sleep(1)
+    logging.debug('...{} found!'.format(fname))
+    return fname

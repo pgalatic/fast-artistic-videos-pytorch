@@ -7,8 +7,8 @@ import os
 import pdb
 import time
 import logging
-import pathlib
 import functools
+import threading
 
 # EXTERNAL LIB
 import torch
@@ -23,10 +23,13 @@ import numpy as np
 try:
     import loss
     import common
+    import optflow
+    from const import *
 except:
     from . import loss
     from . import common
-from const import *
+    from . import optflow
+    from .const import *
 
 class LambdaBase(nn.Sequential):
     def __init__(self, fn, *args):
@@ -223,44 +226,44 @@ class StylizationModel():
 
     def set_fname(self, weights_fname):
         self.model.load_state_dict(torch.load(weights_fname))
+        logging.info('...{} loaded.'.format(weights_fname))
     
     def set_weights(self, weights):
         # Assumes torch.load() has already been called
         self.model.load_state_dict(weights)
+        logging.info('...Weights loaded.')
 
-    def stylize(self, framefiles, flowfiles, certfiles, out_dir='.', out_format=OUTPUT_FORMAT):
+    def stylize(self, start, frames, remote):
         crit = None
-        if self.eval:
-            crit = loss.StyleTransferVideoLoss(self.style_fname)
+        if self.eval: crit = loss.StyleTransferVideoLoss(self.style_fname)
+        threading.Thread(target=optflow.optflow, args=(start, frames, remote)).start()
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
-        for idx, (framefile, flowfile, certfile) in enumerate(zip(framefiles, flowfiles, certfiles)):
+        for idx, fname in enumerate(frames):
             # img shape is (h, w, 3), range is [0-255], uint8
-            assert(os.path.exists(framefile))
-            img = cv2.imread(framefile)
+            img = cv2.imread(fname)
             
             if idx == 0:
                 # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
                 out = self.run_image(img)
-                if self.eval:
-                    score = crit.eval(img, out, None)
-                    logging.info('Loss:\t{}'.format(score))
+                if self.eval: crit.eval(img, out, None)
             else:
-                assert(os.path.exists(flowfile))
-                assert(os.path.exists(certfile))
-                logging.debug('Using: {} {}'.format(flowfile, certfile))
+                flowname = str(remote / 'backward_{}_{}.flo'.format(idx + start + 1, idx + start))
+                certname = str(remote / 'reliable_{}_{}.pgm'.format(idx + start + 1, idx + start))
                 # flow shape is (h, w, 2)
-                flow = flowiz.read_flow(flowfile)
+                flow = flowiz.read_flow(common.wait_for(flowname))
                 # cert shape is (h, w, 1)
-                cert = cv2.imread(certfile, cv2.IMREAD_UNCHANGED)
+                cert = cv2.imread(common.wait_for(certname), cv2.IMREAD_UNCHANGED)
                 # out shape is (h, w, 3)
                 out = self.run_next_image(img, out, flow, cert)
-                if self.eval:
-                    score = crit.eval(img, out, (prev, flow, cert))
-                    logging.info('Loss:\t{}'.format(score))
+                if self.eval: crit.eval(img, out, (pout, flow, cert))
+                # Remove unnecessary files to save space.
+                os.remove(flowname)
+                os.remove(certname)
+            os.remove(fname)
             
-            idy = int(re.findall(r'\d+', os.path.basename(framefile))[0])
-            out_fname = str(pathlib.Path(out_dir) / (OUTPUT_FORMAT % (idy)))
+            idy = int(re.findall(r'\d+', os.path.basename(fname))[0])
+            out_fname = str(remote / (OUTPUT_FORMAT % (idy)))
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)
-            prev = out
+            pout = out
             
