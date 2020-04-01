@@ -269,8 +269,8 @@ class StylizationModel():
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
                 # Remove unnecessary files to save space.
-                #os.remove(flowname)
-                #os.remove(certname)
+                os.remove(flowname)
+                os.remove(certname)
             
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)
