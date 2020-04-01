@@ -124,7 +124,8 @@ def main():
         print(num_frames)
         return
     
-    remote = pathlib.Path('out') / os.path.splitext(os.path.basename(args.target))
+    remote = pathlib.Path('out') / os.path.splitext(os.path.basename(args.target))[0]
+    styutils.makedirs(remote)
 
     if args.mode == 's':
         split_frames(args.target, remote, args.extension)

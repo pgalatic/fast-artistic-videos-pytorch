@@ -70,7 +70,7 @@ class Interpolate(nn.Module):
             size=self.size, scale_factor=self.scale_factor, mode=self.mode, align_corners=self.align_corners)
 
 class StylizationModel():
-    def __init__(self, weights_fname=None, style_fname=None):
+    def __init__(self, weights_fname=None, seed_fname=None, style_fname=None):
     
         # Main stylization network
         self.model = nn.Sequential( # Sequential,
@@ -179,6 +179,7 @@ class StylizationModel():
         self.eval = False
         if weights_fname:
             self.set_fname(weights_fname)
+        self.seed_fname = seed_fname
         if style_fname:
             assert(os.path.exists(style_fname))
             self.style_fname = style_fname
@@ -202,10 +203,10 @@ class StylizationModel():
         
     def run_next_image(self, img, prev, flow, cert):
         start = time.time()
-        # Preprocess the current input image
+        # Preprocess the current input image (h, w, 3) -> (1, 3, h, w)
         pre = styutils.preprocess(img)
-        # Consistency check preprocessing: Apply min filter and swap axes
-        pre_cert = self.min_filter.forward(torch.FloatTensor(np.swapaxes(cert / 255, 0, 1)).unsqueeze(0).unsqueeze(0))
+        # Consistency check preprocessing: Apply min filter
+        pre_cert = self.min_filter.forward(torch.FloatTensor(cert / 255).unsqueeze(0).unsqueeze(0))
         # Warp the previous output with the optical flow between the new image and previous image
         prev_warped = styutils.warp(prev, flow)
         # Apply preprocessing to the warped image
@@ -243,8 +244,11 @@ class StylizationModel():
             img = cv2.imread(fname)
             
             if idx == 0:
-                # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
-                out = self.run_image(img)
+                if self.seed_fname:
+                    out = cv2.imread(self.seed_fname)
+                else:
+                    # Independent style transfer is equivalent to Fast Neural Style by Johnson et al.
+                    out = self.run_image(img)
                 if self.eval: crit.eval(img, out, None)
             else:
                 flowname = str(remote / 'backward_{}_{}.flo'.format(idx + start + 1, idx + start))
@@ -265,8 +269,8 @@ class StylizationModel():
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
                 # Remove unnecessary files to save space.
-                os.remove(flowname)
-                os.remove(certname)
+                #os.remove(flowname)
+                #os.remove(certname)
             
             logging.info('Writing to {}...'.format(out_fname))
             cv2.imwrite(out_fname, out)

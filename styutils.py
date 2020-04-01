@@ -32,7 +32,7 @@ def preprocess(img):
     # Swap RGB to BGR (this appears unnecessary as cv2 is already BGR)
     #bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
     # Swap axes
-    tmp = np.swapaxes(img, 0, 2)
+    tmp = np.swapaxes(np.swapaxes(img, 0, 1), 0, 2)
     
     # Unsqueeze
     usq = torch.Tensor(tmp).unsqueeze(0)
@@ -56,7 +56,7 @@ def deprocess(img):
     sqz = torch.squeeze(add).detach().numpy()
     
     # Swap axes
-    tmp = np.swapaxes(sqz, 0, 2)
+    tmp = np.swapaxes(np.swapaxes(sqz, 0, 2), 0, 1)
     
     # Swap BGR to RGB (this appears unnecessary in general)
     # rgb = cv2.cvtColor(tmp, cv2.COLOR_BGR2RGB)
@@ -73,9 +73,11 @@ def warp(img, flow):
         Tensor: warped image or feature map
     '''
     height, width = flow.shape[:2]
-    flow[:, :, 0] += np.arange(width)
-    flow[:, :, 1] += np.arange(height)[:, np.newaxis]
-    out = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
+    # Don't do in-place modifications!
+    flow_copy = np.copy(flow)
+    flow_copy[:, :, 0] += np.arange(width)
+    flow_copy[:, :, 1] += np.arange(height)[:, np.newaxis]
+    out = cv2.remap(img, flow_copy, None, cv2.INTER_LINEAR)
     return out
 
 def count_files(dir, extension):

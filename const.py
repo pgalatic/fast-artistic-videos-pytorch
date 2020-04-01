@@ -25,7 +25,7 @@ OUTPUT_PREFIX = 'out'
 OUTPUT_FORMAT = 'out-%05d.png'
 
 # The maximum number of threading jobs to run simultaneously.
-MAX_OPTFLOW_JOBS = 4
+MAX_OPTFLOW_JOBS = 1
 MAX_STYLIZATION_JOBS = 1 # experimental, will cause huge slowdown on normal computers
 
 # This mean is used for preprocessing input to the stylization neural network.
