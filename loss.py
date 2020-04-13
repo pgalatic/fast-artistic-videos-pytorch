@@ -15,9 +15,7 @@ from torchvision import models
 
 import cv2
 import flowiz
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 # LOCAL LIB
 try:
@@ -59,13 +57,15 @@ class Vgg16(torch.nn.Module):
         out = vgg_outputs(h_relu1_2, h_relu2_2, h_relu3_3, h_relu4_3)
         return out
 
-class StyleTransferVideoLoss():
+class VideoLoss():
     def __init__(self, style_fname):
         style_img = cv2.imread(style_fname)
         
         style_basename = os.path.splitext(os.path.basename(style_fname))[0]
+        self.content_weight = 1 # TODO configurable
         style_weights = {'WomanHat': 20, 'picasso': 10, 'candy': 10, 'mosaic': 10, 'scream': 20}
         self.style_weight = style_weights[style_basename]
+        self.temporal_weight = 50 # TODO configurable
 
         self.vgg = Vgg16(requires_grad=False)
         style_features = self.vgg(styutils.preprocess(style_img))
@@ -83,7 +83,7 @@ class StyleTransferVideoLoss():
         img_features = self.vgg(styutils.preprocess(img))
         out_features = self.vgg(styutils.preprocess(out))
         
-        content_loss = self.mse_loss(img_features.relu3_3, out_features.relu3_3)
+        content_loss = self.content_weight * self.mse_loss(img_features.relu3_3, out_features.relu3_3)
         
         style_loss = 0
         for feature, target_gram in zip(out_features, self.style_gram):
@@ -101,7 +101,7 @@ class StyleTransferVideoLoss():
             prev_warped_masked = prev_warped * pre_cert.expand_as(prev_warped)
             out_pre = torch.FloatTensor(out).view(1, 3, h, w)
             out_masked = out_pre * pre_cert.expand_as(out_pre)
-            temporal_loss = self.mse_loss(prev_warped_masked, out_masked)
+            temporal_loss = self.temporal_weight * self.mse_loss(prev_warped_masked, out_masked)
         
         logging.debug('CONTENT:\t{}\tSTYLE:\t{}\tTEMPORAL:\t{}'.format(
             content_loss, style_loss, temporal_loss))
@@ -130,7 +130,7 @@ def main():
     styutils.start_logging()
     
     assert(os.path.exists(args.style))
-    l = StyleTransferVideoLoss(args.style)
+    l = VideoLoss(args.style)
     
     ppm_names = [str(pathlib.Path(args.src_dir) / name) for name in glob.glob1(args.src_dir, '*.ppm')]
     flo_names = [str(pathlib.Path(args.src_dir) / name) for name in glob.glob1(args.src_dir, 'backward*.flo')]
@@ -145,9 +145,10 @@ def main():
     flos = [None] + [flowiz.read_flow(fname) for fname in flo_names]
     pgms = [None] + [cv2.imread(fname, cv2.IMREAD_UNCHANGED) for fname in pgm_names]
     favs = [cv2.imread(fname) for fname in fav_names]
-    davs = [cv2.imread(fname) for fname in dav_names]
+    davs = [cv2.imread(fname) for fname in dav_names][:15]
     
     assert(len(ppms) > 0)
+    assert(len(flos) > 1)
     logging.info('Images loaded...')
     
     fc_ls, fs_ls, ft_ls, f_tls = [], [], [], []

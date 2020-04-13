@@ -5,7 +5,6 @@
 # STD LIB
 import os
 import pdb
-import sys
 import glob
 import pathlib
 import argparse
@@ -16,7 +15,7 @@ import argparse
 import model
 import video
 import styutils
-from const import *
+from sconst import *
 
 def parse_args():
     '''Parses arguments.'''
@@ -44,13 +43,13 @@ if __name__ == '__main__':
     args = parse_args()
     styutils.start_logging()
     
-    # Ensure the destination directory is created
-    remote = pathlib.Path('out') / os.path.splitext(os.path.basename(args.video))[0]
-    styutils.makedirs(remote)
+    # Ensure the destination directory is created.
+    dst = pathlib.Path('out') / os.path.splitext(os.path.basename(args.video))[0]
+    styutils.makedirs(dst)
     
-    # Split the video into frames
-    video.split_frames(args.video, remote)
-    frames = sorted([str(remote / frame) for frame in glob.glob1(str(remote), '*.ppm')])
+    # Split the video into frames.
+    video.split_frames(args.video, dst)
+    frames = sorted([str(dst / frame) for frame in glob.glob1(str(dst), '*.ppm')])
     
     if args.test:
         to_remove = frames[NUM_FRAMES_FOR_TEST:]
@@ -58,20 +57,19 @@ if __name__ == '__main__':
         for frame in to_remove:
             os.remove(frame)
     
-    # Stylize the video
+    # Stylize the video.
     model = model.StylizationModel(args.style, args.seed, args.eval_fname)
-    model.stylize(0, frames, remote, args.fast)
+    model.stylize(0, frames, dst, args.fast)
     
-    # Combine the stylized frames
+    # Combine the stylized frames.
     if not args.test:
-        video.combine_frames(args.video, remote)
+        video.combine_frames(args.video, dst)
     
     # Clean up any lingering files.
-    for fname in [str(remote / name) for name in glob.glob1(str(remote), '*.pkl')]:
-        os.remove(fname)
-    #for fname in [str(remote / name) for name in glob.glob1(str(remote), '*.ppm')]:
-    #    os.remove(fname)
-    #for fname in [str(remote / name) for name in glob.glob1(str(remote), '*.plc')]:
-    #    os.remove(fname)
-    #for fname in [str(remote / name) for name in glob.glob1(str(remote), '*.png')]:
-    #    os.remove(fname)
+    exts_to_remove = ['*.pkl', '*.ppm', '*.plc', '*.flo', '*.pgm'] # add .png to remove output files
+    for fname in os.listdir(str(dst)):
+        parts = os.path.splitext(fname)
+        if len(parts) > 1 and parts[1] in exts_to_remove:
+            os.remove(str(dst / fname))
+    
+    

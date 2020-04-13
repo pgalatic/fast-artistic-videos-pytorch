@@ -18,10 +18,10 @@ import ffprobe3
 # LOCAL LIB
 try:
     import styutils
-    from const import *
+    from sconst import *
 except:
     from . import styutils
-    from .const import *
+    from .sconst import *
 
 def check_deps():
     # Preliminary operations to make sure that the environment is set up properly.
@@ -29,15 +29,14 @@ def check_deps():
     if not check:
         sys.exit('ffmpeg not installed. Aborting')
 
-def split_frames(target, remote, extension='.ppm'):
+def split_frames(target, dst, extension='.ppm'):
     check_deps()
 
     # Split video into a collection of frames. 
-    # Having a local copy of the frames is preferred if working with a remote server.
     # Don't split the video if we've already done so.
     probe = ffprobe3.FFProbe(str(target))
     num_frames = int(probe.streams[0].nb_frames)
-    files_present = styutils.count_files(remote, extension)
+    files_present = styutils.count_files(dst, extension)
     
     if num_frames <= files_present:
         logging.info('Video is already split into {} frames'.format(num_frames))
@@ -48,15 +47,15 @@ def split_frames(target, remote, extension='.ppm'):
     
     # This line is to account for extensions other than the default.
     frame_name = os.path.splitext(FRAME_NAME)[0] + extension
-    subprocess.run(['ffmpeg', '-i', str(target), str(remote / frame_name)])
+    subprocess.run(['ffmpeg', '-i', str(target), str(dst / frame_name)])
 
-def combine_frames(target, remote, format=None, extension='.mp4', lossless=False):
+def combine_frames(target, src, dst=pathlib.Path('out'), format=None, extension='.mp4', lossless=False):
     check_deps()
     
     if not format: format = OUTPUT_FORMAT
     basename = os.path.splitext(os.path.basename(str(target)))[0]
-    no_audio = str(remote / ('{}_no_audio{}'.format(basename, extension)))
-    audio = str('..' / remote / ('{}_stylized{}'.format(basename, extension)))
+    no_audio = str(src / ('{}_no_audio{}'.format(basename, extension)))
+    audio = str(dst / ('{}_stylized{}'.format(basename, extension)))
 
     # Don't try to combine frames if the destination already exists.
     # FFMPEG checks for this, but if we should preemptively avoid it if we can.
@@ -76,7 +75,7 @@ def combine_frames(target, remote, format=None, extension='.mp4', lossless=False
     # Combine stylized frames into a video.
     logging.debug('Running lossy compression...')
     subprocess.run([
-        'ffmpeg', '-i', str(remote / format),
+        'ffmpeg', '-i', str(src / format),
         '-c:v', 'libx264', '-preset', 'veryslow',
         '-pix_fmt', 'yuv420p',
         '-filter:v', 'setpts={}/{}*N/TB'.format(duration, num_frames),
@@ -124,11 +123,11 @@ def main():
         print(num_frames)
         return
     
-    remote = pathlib.Path('out') / os.path.splitext(os.path.basename(args.target))[0]
-    styutils.makedirs(remote)
+    dst = pathlib.Path('out') / os.path.splitext(os.path.basename(args.target))[0]
+    styutils.makedirs(dst)
 
     if args.mode == 's':
-        split_frames(args.target, remote, args.extension)
+        split_frames(args.target, dst, args.extension)
     elif args.mode == 'c':
         if not args.src:
             sys.exit('Please specify a source directory.')

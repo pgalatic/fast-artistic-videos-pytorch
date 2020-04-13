@@ -6,7 +6,6 @@
 
 # STD LIB
 import os
-import re
 import pdb
 import glob
 import time
@@ -24,56 +23,45 @@ import numpy as np
 # LOCAL LIB
 try:
     import styutils
-    from const import *
+    from sconst import *
 except:
     from . import styutils
-    from .const import *
+    from .sconst import *
 
-def most_recent_optflow(remote):
-    # Check to see if the optical flow folder exists.
-    if not os.path.isdir(str(remote)):
-        # If it doesn't exist, then there are no optflow files, and we start from scratch.
-        return 1
+def write_flow(fname, flow):
+    '''
+    Write optical flow to a .flo file
+    Args:
+        flow: optical flow
+        dst_file: Path where to write optical flow
+    '''
+    # Save optical flow to disk
+    with open(fname, 'wb') as f:
+        np.array(202021.25, dtype=np.float32).tofile(f) # Write magic number for .flo files
+        height, width = flow.shape[:2]
+        np.array(width, dtype=np.uint32).tofile(f)      # Write width
+        np.array(height, dtype=np.uint32).tofile(f)     # Write height
+        flow.astype(np.float32).tofile(f)               # Write data
 
-    # The most recent optflow is the most recent placeholder plus 1.
-    placeholders = glob.glob1(str(remote), 'frame_*.plc')
-    if len(placeholders) == 0: return 1
-    
-    return max(map(int, [re.findall(r'\d+', plc)[0] for plc in placeholders])) + 1
-
-def claim_job(idx, frames, remote):
+def claim_job(idx, frames, dst):
     '''
     All nodes involved are assumed to share a common directory. In this directory, placeholders
     are created so that no two nodes work compute the same material. 
     '''
     # Try to create a placeholder.
-    placeholder = str(remote / (os.path.splitext(FRAME_NAME)[0] % idx + '.plc'))
+    placeholder = str(dst / (os.path.splitext(FRAME_NAME)[0] % idx + '.plc'))
     try:
         # This will only succeed if this program successfully created the placeholder.
         with open(placeholder, 'x') as handle:
             handle.write('PLACEHOLDER CREATED BY {name}'.format(name=platform.node()))
         
         logging.debug('Job claimed: {}'.format(idx))
-        start_name = str(remote / (FRAME_NAME % idx))
-        end_name = str(remote / (FRAME_NAME % (idx + 1)))
+        start_name = str(dst / (FRAME_NAME % idx))
+        end_name = str(dst / (FRAME_NAME % (idx + 1)))
         return start_name, end_name
     except FileExistsError:
         # We couldn't claim that job.
         return None, None
-
-def write_flow(fname, flow):
-    """Write optical flow to a .flo file
-    Args:
-        flow: optical flow
-        dst_file: Path where to write optical flow
-    """
-    # Save optical flow to disk
-    with open(fname, 'wb') as f:
-        np.array(202021.25, dtype=np.float32).tofile(f)
-        height, width = flow.shape[:2]
-        np.array(width, dtype=np.uint32).tofile(f)
-        np.array(height, dtype=np.uint32).tofile(f)
-        flow.astype(np.float32).tofile(f)
 
 def farneback(start_name, end_name, forward_name, backward_name):
     start = cv2.cvtColor(cv2.imread(start_name), cv2.COLOR_BGR2GRAY)
@@ -105,12 +93,12 @@ def deepflow(start_name, end_name, forward_name, backward_name):
         str('.' / root / DEEPFLOW2), end_name, start_name, backward_name, '-match'
     ], stdin=backward_dm.stdout)
 
-def run_job(idx, start_name, end_name, remote, fast):
+def run_job(idx, start_name, end_name, dst, fast):
     logging.info('Computing optical flow for job {}.'.format(idx))
     
-    forward_name = str(remote / 'forward_{}_{}.flo'.format(idx, idx+1))
-    backward_name = str(remote / 'backward_{}_{}.flo'.format(idx+1, idx))
-    reliable_name = str(remote / 'reliable_{}_{}.pgm'.format(idx+1, idx))
+    forward_name = str(dst / 'forward_{}_{}.flo'.format(idx, idx+1))
+    backward_name = str(dst / 'backward_{}_{}.flo'.format(idx+1, idx))
+    reliable_name = str(dst / 'reliable_{}_{}.pgm'.format(idx+1, idx))
     
     if fast:
         farneback(start_name, end_name, forward_name, backward_name)
@@ -128,7 +116,7 @@ def run_job(idx, start_name, end_name, remote, fast):
     # Remove forward optical flow to save space, as it is only needed for the consistency check.
     os.remove(forward_name)
 
-def optflow(start, frames, remote, fast=False):
+def optflow(start, frames, dst, fast=False):
     logging.info('Starting optical flow calculations...')
         
     running = []
@@ -139,11 +127,11 @@ def optflow(start, frames, remote, fast=False):
             running = [thread for thread in running if thread.isAlive()]
             time.sleep(1)
         # Optical flow files are 1-indexed.
-        start_name, end_name = claim_job(idx + 1, frames, remote)
+        start_name, end_name = claim_job(idx + 1, frames, dst)
         if start_name:
             # Spawn a thread to complete that job, then get the next one.
             running.append(threading.Thread(target=run_job, 
-                args=(idx + 1, start_name, end_name, remote, fast)))
+                args=(idx + 1, start_name, end_name, dst, fast)))
             running[-1].start()
     
     # Join all remaining threads.

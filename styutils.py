@@ -13,7 +13,10 @@ import cv2
 import numpy as np
 
 # LOCAL LIB
-from const import *
+try:
+    from sconst import *
+except:
+    from .sconst import *
 
 def start_logging():
     '''

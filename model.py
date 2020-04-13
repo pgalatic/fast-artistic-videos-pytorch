@@ -23,12 +23,12 @@ try:
     import loss
     import styutils
     import optflow
-    from const import *
+    from sconst import *
 except:
     from . import loss
     from . import styutils
     from . import optflow
-    from .const import *
+    from .sconst import *
 
 class LambdaBase(nn.Sequential):
     def __init__(self, fn, *args):
@@ -185,6 +185,15 @@ class StylizationModel():
             self.style_fname = style_fname
             self.eval = True
     
+    def set_fname(self, weights_fname):
+        self.model.load_state_dict(torch.load(weights_fname))
+        logging.info('...{} loaded.'.format(weights_fname))
+    
+    def set_weights(self, weights):
+        # Assumes torch.load() has already been called
+        self.model.load_state_dict(weights)
+        logging.info('...Weights loaded.')
+    
     def run_image(self, img):
         start = time.time()
         # Preprocess the current input image
@@ -224,22 +233,16 @@ class StylizationModel():
         # round output to prevent drifting over time
         return np.round(dep)
 
-    def set_fname(self, weights_fname):
-        self.model.load_state_dict(torch.load(weights_fname))
-        logging.info('...{} loaded.'.format(weights_fname))
-    
-    def set_weights(self, weights):
-        # Assumes torch.load() has already been called
-        self.model.load_state_dict(weights)
-        logging.info('...Weights loaded.')
+    def optflow_thread(self, start, frames, dst, fast):
+        threading.Thread(target=optflow.optflow, args=(start, frames, dst, fast)).start()
 
-    def stylize(self, start, frames, remote, fast):
+    def stylize(self, start, frames, dst, fast):
         crit = None
-        if self.eval: crit = loss.StyleTransferVideoLoss(self.style_fname)
-        threading.Thread(target=optflow.optflow, args=(start, frames, remote, fast)).start()
+        if self.eval: crit = loss.VideoLoss(self.style_fname)
+        self.optflow_thread(start, frames, dst, fast)
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, fname in enumerate(frames):
-            out_fname = str(remote / (OUTPUT_FORMAT % (idx + start + 1)))
+            out_fname = str(dst / (OUTPUT_FORMAT % (idx + start + 1)))
             # img shape is (h, w, 3), range is [0-255], uint8
             img = cv2.imread(fname)
             
@@ -251,8 +254,8 @@ class StylizationModel():
                     out = self.run_image(img)
                 if self.eval: crit.eval(img, out, None)
             else:
-                flowname = str(remote / 'backward_{}_{}.flo'.format(idx + start + 1, idx + start))
-                certname = str(remote / 'reliable_{}_{}.pgm'.format(idx + start + 1, idx + start))
+                flowname = str(dst / 'backward_{}_{}.flo'.format(idx + start + 1, idx + start))
+                certname = str(dst / 'reliable_{}_{}.pgm'.format(idx + start + 1, idx + start))
                 # flow shape is (h, w, 2)
                 while True:
                     try:
@@ -268,7 +271,7 @@ class StylizationModel():
                 # out shape is (h, w, 3)
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
-                # Remove unnecessary files to save space.
+                # Remove now-unnecessary files to save space.
                 os.remove(flowname)
                 os.remove(certname)
             
