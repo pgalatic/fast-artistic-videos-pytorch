@@ -107,7 +107,7 @@ def parse_args():
     ap.add_argument('--src', type=str, nargs='?', default=None,
         help='The path to the folder in which the frames are contained, if combining them.')
     ap.add_argument('--format', type=str, default=None,
-        help='The format of image filenames, when combining frames, e.g. out-%05d.png [None].')
+        help='The format of image filenames, when combining frames, e.g. out-%%05d.png [None].')
     ap.add_argument('--extension', type=str, nargs='?', default='.png',
         help='The extension used for the frames of a split video [.png].')
     

@@ -18,22 +18,25 @@ import subprocess
 
 # EXTERNAL LIB
 import cv2
+import torch
 import numpy as np
 
 # LOCAL LIB
 try:
     import styutils
     from sconst import *
+    from spynet import spynet
 except:
     from . import styutils
     from .sconst import *
+    from .spynet import spynet
 
 def write_flow(fname, flow):
     '''
     Write optical flow to a .flo file
     Args:
-        flow: optical flow
-        dst_file: Path where to write optical flow
+        fname: Path where to write optical flow
+        flow: an ndarray containing optical flow data
     '''
     # Save optical flow to disk
     with open(fname, 'wb') as f:
@@ -63,19 +66,7 @@ def claim_job(idx, frames, dst):
         # We couldn't claim that job.
         return None, None
 
-def farneback(start_name, end_name, forward_name, backward_name):
-    start = cv2.cvtColor(cv2.imread(start_name), cv2.COLOR_BGR2GRAY)
-    end = cv2.cvtColor(cv2.imread(end_name), cv2.COLOR_BGR2GRAY)
-    
-    # Compute forward optical flow.
-    forward = cv2.calcOpticalFlowFarneback(start, end, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    # Compute backward optical flow.
-    backward = cv2.calcOpticalFlowFarneback(end, start, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    
-    write_flow(forward_name, forward)
-    write_flow(backward_name, backward)
-
-def deepflow(start_name, end_name, forward_name, backward_name):
+def deep_flow(start_name, end_name, forward_name, backward_name):
     # Compute forward optical flow.
     root = pathlib.Path(__file__).parent.absolute()
     forward_dm = subprocess.Popen([
@@ -93,6 +84,24 @@ def deepflow(start_name, end_name, forward_name, backward_name):
         str('.' / root / DEEPFLOW2), end_name, start_name, backward_name, '-match'
     ], stdin=backward_dm.stdout)
 
+def farneback_flow(start_name, end_name):
+    start = cv2.cvtColor(cv2.imread(start_name), cv2.COLOR_BGR2GRAY)
+    end = cv2.cvtColor(cv2.imread(end_name), cv2.COLOR_BGR2GRAY)
+    
+    forward = cv2.calcOpticalFlowFarneback(start, end, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    backward = cv2.calcOpticalFlowFarneback(end, start, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    
+    return forward, backward
+
+def spynet_flow(start_name, end_name):
+    start = torch.Tensor(cv2.imread(start_name).transpose(2, 0, 1) * (1.0 / 255.0))
+    end = torch.Tensor(cv2.imread(end_name).transpose(2, 0, 1) * (1.0 / 255.0))
+    
+    forward = spynet.estimate(start, end).detach().numpy().transpose(1, 2, 0)
+    backward = spynet.estimate(end, start).detach().numpy().transpose(1, 2, 0)
+    
+    return forward, backward
+
 def run_job(idx, start_name, end_name, dst, fast):
     logging.info('Computing optical flow for job {}.'.format(idx))
     
@@ -101,9 +110,17 @@ def run_job(idx, start_name, end_name, dst, fast):
     reliable_name = str(dst / 'reliable_{}_{}.pgm'.format(idx+1, idx))
     
     if fast:
-        farneback(start_name, end_name, forward_name, backward_name)
+        forward, backward = farneback_flow(start_name, end_name)
+        # Write flows to disk so that they can be used in the consistency check.
+        write_flow(forward_name, forward)
+        write_flow(backward_name, backward)
+    elif True: # TODO: options
+        deep_flow(start_name, end_name, forward_name, backward_name)
     else:
-        deepflow(start_name, end_name, forward_name, backward_name)
+        forward, backward = spynet_flow(start_name, end_name)
+        # Write flows to disk so that they can be used in the consistency check.
+        write_flow(forward_name, forward)
+        write_flow(backward_name, backward)
     
     # The absolute path accounts for if this file is being run as part of a submodule.
     root = pathlib.Path(__file__).parent.absolute()
