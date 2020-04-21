@@ -1,0 +1,3 @@
+[submodule "spynet"]
+	path = spynet
+	url = https://github.com/pgalatic/pytorch-spynet.git

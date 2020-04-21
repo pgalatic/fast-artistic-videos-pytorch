@@ -3,6 +3,7 @@
 styles/
 out/
 consistencyChecker/consistencyChecker
+consistencyChecker/test
 deepmatching-static
 deepflow2-static
 
