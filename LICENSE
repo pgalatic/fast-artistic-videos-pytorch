@@ -1,0 +1,51 @@
+By downloading, copying, installing, or using this software, you agree
+to the terms of this license, and those contained in the "Ancillary
+Software Licenses" section below. If you do not agree to any of these
+terms or licenses, do not download, install, copy, or use the software
+or any other material included in in distribution.
+
+This code is free for personal or research use. Any commercial use is 
+prohibited.
+
+Copyright (C) 2019-2020, Paul Galatic.
+All rights reserved.
+
+If you use this program in your research, you must cite the following paper:
+
+P. Galatic (2020). "Divide and Conquer in Neural Style Transfer for Video".
+https://www.overleaf.com/read/jfbxqnmqnwqh
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+-----------------------------------------------------------------------
+
+                   Ancillary Software Licenses
+
+This software uses the following third-party open source libraries and
+are released under the terms detailed below. By downloading, copying,
+installing or using this software/tutorial, you agree to these terms.
+
+-----------------------------------------------------------------------
+
+All Python libraries used by this software whose source code is not included
+in this repository are covered by their respective licenses. 
+
+This code is based on the fast-artistic-videos code by Ruder et al. which is 
+free for personal or research use.
+
+This software relies on FFmpeg. FFmpeg is a trademark of Fabrice Bellard. 
+It is covered by a combination of the GNU Lesser General Public License v2.1 or 
+later (LGPL v2.1+) and MIT/X11/BSD-style licences.
+
+This software includes a modified version of Convert Torch to pyTorch, which 
+is covered by the MIT License.

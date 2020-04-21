@@ -2,8 +2,10 @@
 *.pdf
 styles/
 consistencyChecker/consistencyChecker
+consistencyChecker/test
 deepmatching-static
 deepflow2-static
+out/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
