@@ -29,14 +29,14 @@ def check_deps():
     if not check:
         sys.exit('ffmpeg not installed. Aborting')
 
-def split_frames(target, dst, extension='.ppm'):
+def split_frames(target, dst, extension='ppm'):
     check_deps()
 
     # Split video into a collection of frames. 
     # Don't split the video if we've already done so.
     probe = ffprobe3.FFProbe(str(target))
     num_frames = int(probe.streams[0].nb_frames)
-    files_present = styutils.count_files(dst, extension)
+    files_present = styutils.count_files(dst, '.{}'.format(extension))
     
     if num_frames <= files_present:
         logging.info('Video is already split into {} frames'.format(num_frames))
@@ -46,16 +46,16 @@ def split_frames(target, dst, extension='.ppm'):
         num_frames, files_present))
     
     # This line is to account for extensions other than the default.
-    frame_name = os.path.splitext(FRAME_NAME)[0] + extension
+    frame_name = '{}.{}'.format(os.path.splitext(FRAME_NAME)[0], extension)
     subprocess.run(['ffmpeg', '-i', str(target), str(dst / frame_name)])
 
-def combine_frames(target, src, dst=pathlib.Path('out'), format=None, extension='.mp4', lossless=False):
+def combine_frames(target, src, dst=pathlib.Path('out'), format=None):
     check_deps()
     
     if not format: format = OUTPUT_FORMAT
     basename = os.path.splitext(os.path.basename(str(target)))[0]
-    no_audio = str(src / ('{}_no_audio{}'.format(basename, extension)))
-    audio = str(dst / ('{}_stylized{}'.format(basename, extension)))
+    no_audio = str(src / ('{}_no_audio.mp4'.format(basename)))
+    audio = str(dst / ('{}_stylized.mp4'.format(basename)))
 
     # Don't try to combine frames if the destination already exists.
     # FFMPEG checks for this, but if we should preemptively avoid it if we can.
@@ -73,7 +73,6 @@ def combine_frames(target, src, dst=pathlib.Path('out'), format=None, extension=
     num_frames = str(probe.streams[0].nb_frames)
     
     # Combine stylized frames into a video.
-    logging.debug('Running lossy compression...')
     subprocess.run([
         'ffmpeg', '-i', str(src / format),
         '-c:v', 'libx264', '-preset', 'veryslow',
@@ -108,7 +107,7 @@ def parse_args():
         help='The path to the folder in which the frames are contained, if combining them.')
     ap.add_argument('--format', type=str, default=None,
         help='The format of image filenames, when combining frames, e.g. out-%%05d.png [None].')
-    ap.add_argument('--extension', type=str, nargs='?', default='.png',
+    ap.add_argument('--extension', choices=['ppm', 'png'], nargs='?', default='png',
         help='The extension used for the frames of a split video [.png].')
     
     return ap.parse_args()
@@ -131,8 +130,7 @@ def main():
     elif args.mode == 'c':
         if not args.src:
             sys.exit('Please specify a source directory.')
-        combine_frames(
-            args.target, pathlib.Path(args.src), format=args.format)
+        combine_frames(args.target, pathlib.Path(args.src), format=args.format)
 
 if __name__ == '__main__':
     main()

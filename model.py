@@ -233,13 +233,13 @@ class StylizationModel():
         # round output to prevent drifting over time
         return np.round(dep)
 
-    def optflow_thread(self, start, frames, dst, fast):
-        threading.Thread(target=optflow.optflow, args=(start, frames, dst, fast)).start()
+    def optflow_thread(self, start, frames, dst, method):
+        threading.Thread(target=optflow.optflow, args=(start, frames, dst, method)).start()
 
-    def stylize(self, start, frames, dst, fast):
+    def stylize(self, start, frames, dst, method):
         crit = None
         if self.eval: crit = loss.VideoLoss(self.style_fname)
-        self.optflow_thread(start, frames, dst, fast)
+        self.optflow_thread(start, frames, dst, method)
         # Flowfiles and certfiles lists must have a None at the start, which is skipped
         for idx, fname in enumerate(frames):
             out_fname = str(dst / (OUTPUT_FORMAT % (idx + start + 1)))

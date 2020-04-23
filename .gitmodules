@@ -1,3 +1,6 @@
 [submodule "spynet"]
 	path = spynet
 	url = https://github.com/pgalatic/pytorch-spynet.git
+[submodule "flownet"]
+	path = flownet
+	url = https://github.com/pgalatic/FlowNetPytorch.git

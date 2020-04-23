@@ -34,8 +34,8 @@ def parse_args():
         help='Use an image to seed stylization instead of random initialization')
     ap.add_argument('--eval_fname', nargs='?', default=None,
         help='The path to the style image used for evaluating the model. Specifying this activates evaluation.')
-    ap.add_argument('--fast', action='store_true',
-        help='Use Farneback optical flow, which is faster than the default, DeepFlow2.')
+    ap.add_argument('--optflow', choices=['farneback', 'spynet', 'flownet', 'deepflow2'], default='deepflow2',
+        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. The others are somewhere in-between.')
     
     return ap.parse_args()
 
@@ -59,7 +59,7 @@ if __name__ == '__main__':
     
     # Stylize the video.
     model = model.StylizationModel(args.style, args.seed, args.eval_fname)
-    model.stylize(0, frames, dst, args.fast)
+    model.stylize(0, frames, dst, args.optflow)
     
     # Combine the stylized frames.
     if not args.test:

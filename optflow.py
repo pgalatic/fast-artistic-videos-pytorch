@@ -26,10 +26,12 @@ try:
     import styutils
     from sconst import *
     from spynet import spynet
-except:
+    from flownet import flownet
+except ImportError:
     from . import styutils
     from .sconst import *
     from .spynet import spynet
+    from .flownet import flownet
 
 def write_flow(fname, flow):
     '''
@@ -66,6 +68,33 @@ def claim_job(idx, frames, dst):
         # We couldn't claim that job.
         return None, None
 
+def farneback_flow(start_name, end_name):
+    start = cv2.cvtColor(cv2.imread(start_name), cv2.COLOR_BGR2GRAY)
+    end = cv2.cvtColor(cv2.imread(end_name), cv2.COLOR_BGR2GRAY)
+    
+    forward = cv2.calcOpticalFlowFarneback(start, end, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    backward = cv2.calcOpticalFlowFarneback(end, start, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+    
+    return forward, backward
+
+def spynet_flow(start_name, end_name):
+    start = torch.Tensor(cv2.imread(start_name).transpose(2, 0, 1) * (1.0 / 255.0))
+    end = torch.Tensor(cv2.imread(end_name).transpose(2, 0, 1) * (1.0 / 255.0))
+
+    forward = spynet.estimate(start, end).detach().numpy().transpose(1, 2, 0)
+    backward = spynet.estimate(end, start).detach().numpy().transpose(1, 2, 0)
+    
+    return forward, backward
+
+def net_flow(start_name, end_name):
+    start = torch.Tensor(cv2.imread(start_name).transpose(2, 0, 1) * (1.0 / 255.0))
+    end = torch.Tensor(cv2.imread(end_name).transpose(2, 0, 1) * (1.0 / 255.0))
+
+    forward = flownet.estimate(start, end).squeeze().detach().numpy().transpose(1, 2, 0)
+    backward = flownet.estimate(end, start).squeeze().detach().numpy().transpose(1, 2, 0)
+    
+    return forward, backward
+
 def deep_flow(start_name, end_name, forward_name, backward_name):
     # Compute forward optical flow.
     root = pathlib.Path(__file__).parent.absolute()
@@ -84,43 +113,31 @@ def deep_flow(start_name, end_name, forward_name, backward_name):
         str('.' / root / DEEPFLOW2), end_name, start_name, backward_name, '-match'
     ], stdin=backward_dm.stdout)
 
-def farneback_flow(start_name, end_name):
-    start = cv2.cvtColor(cv2.imread(start_name), cv2.COLOR_BGR2GRAY)
-    end = cv2.cvtColor(cv2.imread(end_name), cv2.COLOR_BGR2GRAY)
-    
-    forward = cv2.calcOpticalFlowFarneback(start, end, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    backward = cv2.calcOpticalFlowFarneback(end, start, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-    
-    return forward, backward
-
-def spynet_flow(start_name, end_name):
-    start = torch.Tensor(cv2.imread(start_name).transpose(2, 0, 1) * (1.0 / 255.0))
-    end = torch.Tensor(cv2.imread(end_name).transpose(2, 0, 1) * (1.0 / 255.0))
-    
-    forward = spynet.estimate(start, end).detach().numpy().transpose(1, 2, 0)
-    backward = spynet.estimate(end, start).detach().numpy().transpose(1, 2, 0)
-    
-    return forward, backward
-
-def run_job(idx, start_name, end_name, dst, fast):
+def run_job(idx, start_name, end_name, dst, method):
     logging.info('Computing optical flow for job {}.'.format(idx))
     
     forward_name = str(dst / 'forward_{}_{}.flo'.format(idx, idx+1))
     backward_name = str(dst / 'backward_{}_{}.flo'.format(idx+1, idx))
     reliable_name = str(dst / 'reliable_{}_{}.pgm'.format(idx+1, idx))
     
-    if fast:
+    if method == 'farneback':
         forward, backward = farneback_flow(start_name, end_name)
         # Write flows to disk so that they can be used in the consistency check.
         write_flow(forward_name, forward)
         write_flow(backward_name, backward)
-    elif True: # TODO: options
-        deep_flow(start_name, end_name, forward_name, backward_name)
-    else:
+    elif method == 'spynet':
         forward, backward = spynet_flow(start_name, end_name)
         # Write flows to disk so that they can be used in the consistency check.
         write_flow(forward_name, forward)
         write_flow(backward_name, backward)
+    elif method == 'flownet':
+        forward, backward = net_flow(start_name, end_name)
+        write_flow(forward_name, forward)
+        write_flow(backward_name, backward)
+    elif method == 'deepflow2': # TODO: options
+        deep_flow(start_name, end_name, forward_name, backward_name)
+    else:
+        raise Exception('Bad flow method: {}'.format(method))
     
     # The absolute path accounts for if this file is being run as part of a submodule.
     root = pathlib.Path(__file__).parent.absolute()
@@ -133,7 +150,7 @@ def run_job(idx, start_name, end_name, dst, fast):
     # Remove forward optical flow to save space, as it is only needed for the consistency check.
     os.remove(forward_name)
 
-def optflow(start, frames, dst, fast=False):
+def optflow(start, frames, dst, method):
     logging.info('Starting optical flow calculations...')
         
     running = []
@@ -148,7 +165,7 @@ def optflow(start, frames, dst, fast=False):
         if start_name:
             # Spawn a thread to complete that job, then get the next one.
             running.append(threading.Thread(target=run_job, 
-                args=(idx + 1, start_name, end_name, dst, fast)))
+                args=(idx + 1, start_name, end_name, dst, method)))
             running[-1].start()
     
     # Join all remaining threads.
@@ -162,14 +179,17 @@ def parse_args():
     '''Parses arguments.'''
     ap = argparse.ArgumentParser()
     
-    ap.add_argument('remote', type=str,
+    ap.add_argument('dst', type=str,
         help='The directory in which the .ppm files are stored and in which to place the .flo, .pgm files.')
     
     # Optional arguments
+    ap.add_argument('--method', nargs='?', 
+        choices=['farneback', 'spynet', 'flownet', 'deepflow2'], 
+        default='deepflow2',
+        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. The others are somewhere in-between.')
     ap.add_argument('--test', action='store_true',
         help='Compute optical flow over only a few frames to test functionality.')
-    ap.add_argument('--fast', action='store_true',
-        help='Use Farneback optical flow, which is faster than the default, DeepFlow2.')
+
     
     return ap.parse_args()
 
@@ -177,13 +197,13 @@ def main():
     args = parse_args()
     styutils.start_logging()
     
-    remote = pathlib.Path(args.remote)
+    dst = pathlib.Path(args.dst)
     
-    frames = glob.glob1(str(remote), '*.ppm')
+    frames = glob.glob1(str(dst), '*.ppm')
     if args.test:
         frames = frames[:NUM_FRAMES_FOR_TEST]
     
-    optflow(0, frames, remote, args.fast)
+    optflow(0, frames, dst, args.method)
 
 if __name__ == '__main__':
     main()
