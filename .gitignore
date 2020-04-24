@@ -4,8 +4,6 @@ styles/
 out/
 consistencyChecker/consistencyChecker
 consistencyChecker/test
-deepmatching-static
-deepflow2-static
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

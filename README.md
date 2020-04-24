@@ -54,12 +54,12 @@ url     = "https://github.com/pgalatic/thesis"
 Known issues:
 * Currently, if a computation is interrupted and later began again, not all files will be successfully computed. It would be helpful to have a preprocessing step where, if placeholder files are observed to already exist, it will comb through and delete those that do not have a corresponding optical flow file.
 * If the filesystem runs out of memory, the program may loop endlessly trying to create the same optical flow or stylization files, because Python's open(fname, 'x') will execute successfully even though the file is not created. This should not happen anymore now that memory use has been drastically reduced, but could theoretically still happen in certain scenarios or hyperparameter configurations.
-* Sometimes OpenCV has trouble opening the occlusion ".pgm" files. This creates a scary traceback, but seems benign as far as I can tell—it doesn't cause a crash or affect the output. It might cause the occlusion files to be read as zero-tensors, though, which should be corrected if that's the case.
+* Sometimes OpenCV has trouble opening the occlusion ".pgm" files. This creates a scary traceback, but seems benign as far as I can tell—it doesn't cause a crash or affect the output, as the program simply tries to load the file again.
 
 ## Future Work
 
 [ ] Convert consistencyChecker to Python
-[ ] Implement SPyNet
+[x] Implement SPyNet
 [ ] Enable CUDA/CUDNN
 [ ] Implment LiteFlowNet
 

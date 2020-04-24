@@ -24,7 +24,11 @@ def start_logging():
     logfile, and all logs are also printed to console.
     '''
     logging.basicConfig(filename=LOGFILE, filemode='a', format=LOGFORMAT, level=logging.INFO)
-    logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+    logger = logging.getLogger()
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    def my_handler(type, value, tb):
+        logger.exception("Uncaught exception: {0}".format(str(value)))
+    sys.excepthook = my_handler
 
 def preprocess(img):
     # in: (h, w, 3)

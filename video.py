@@ -31,7 +31,8 @@ def check_deps():
 
 def split_frames(target, dst, extension='ppm'):
     check_deps()
-
+    
+    styutils.makedirs(dst)
     # Split video into a collection of frames. 
     # Don't split the video if we've already done so.
     probe = ffprobe3.FFProbe(str(target))
@@ -52,6 +53,7 @@ def split_frames(target, dst, extension='ppm'):
 def combine_frames(target, src, dst=pathlib.Path('out'), format=None):
     check_deps()
     
+    styutils.makedirs(dst)
     if not format: format = OUTPUT_FORMAT
     basename = os.path.splitext(os.path.basename(str(target)))[0]
     no_audio = str(src / ('{}_no_audio.mp4'.format(basename)))
