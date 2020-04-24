@@ -34,7 +34,7 @@ def parse_args():
         help='Use an image to seed stylization instead of random initialization')
     ap.add_argument('--eval_fname', nargs='?', default=None,
         help='The path to the style image used for evaluating the model. Specifying this activates evaluation.')
-    ap.add_argument('--optflow', choices=['farneback', 'spynet', 'flownet', 'deepflow2'], default='deepflow2',
+    ap.add_argument('--optflow', choices=['farneback', 'spynet', 'flownet', 'deepflow2'], default='spynet',
         help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. The others are somewhere in-between.')
     
     return ap.parse_args()
