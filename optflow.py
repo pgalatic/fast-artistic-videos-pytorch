@@ -83,7 +83,7 @@ def parse_args():
     ap.add_argument('--method', nargs='?', 
         choices=['farneback', 'spynet', 'deepflow2'], 
         default='deepflow2',
-        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. Spynet is a good balance.')
+        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. Spynet is the best balance on the CPU.')
     ap.add_argument('--test', action='store_true',
         help='Compute optical flow over only a few frames to test functionality.')
 

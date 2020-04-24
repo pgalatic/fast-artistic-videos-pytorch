@@ -13,6 +13,7 @@ git submodule update --init
 cd flowcalc
 git checkout master
 bash install.sh
+cd -
 
 # Download style models
 gdown https://drive.google.com/uc?id=1GkMMR6yZ29DvGrl-nFybn51Nih-ycll0

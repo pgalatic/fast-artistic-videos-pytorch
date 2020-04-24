@@ -262,10 +262,13 @@ class StylizationModel():
                         flow = flowiz.read_flow(styutils.wait_for(flowname))
                         break
                     except ValueError:
+                        logging.info('Read flow too early! {}'.format(flowname))
                         time.sleep(1) # It hasn't finished writing to disk yet
                 # cert shape is (h, w, 1)
                 cert = cv2.imread(styutils.wait_for(certname), cv2.IMREAD_UNCHANGED)
+                # No cert should be 100% blank.
                 while cert is None:
+                    logging.info('Read cert too early! {}'.format(certname))
                     time.sleep(1)
                     cert = cv2.imread(styutils.wait_for(certname), cv2.IMREAD_UNCHANGED)
                 # out shape is (h, w, 3)

@@ -35,7 +35,7 @@ def parse_args():
     ap.add_argument('--eval_fname', nargs='?', default=None,
         help='The path to the style image used for evaluating the model. Specifying this activates evaluation.')
     ap.add_argument('--optflow', choices=['farneback', 'spynet', 'flownet', 'deepflow2'], default='spynet',
-        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. The others are somewhere in-between.')
+        help='Choice of optical flow calculation. Farneback is the fastest, but least accurate. Deepflow2 is the slowest, but most accurate. Spynet is the best balance on the CPU.')
     
     return ap.parse_args()
 
