@@ -58,11 +58,11 @@ Known issues:
 
 ## Future Work
 
-[ ] Convert consistencyChecker to Python
-[x] Implement SPyNet
-[ ] Enable CUDA/CUDNN
-[ ] Implment LiteFlowNet
+* [ ] Convert consistencyChecker to Python
+* [x] Implement SPyNet
+* [ ] Enable CUDA/CUDNN
+* [ ] Implment LiteFlowNet
 
-* Enabling CUDA/CUDNN is an important priority, and now that the repository uses pyTorch instead of Torch, this upgrade should be relatively simple, though it must wait until my thesis is published.
-* Migrating from using external binaries for calculating optical flow to using Python-integrated optical flow calculations will allow the optical flow files to be stored in memory instead of being written to disk. This is especially possible for the certs, which are quick enough to be computed on the fly.
-* Fully recreating the training mechanisms of the core program, or replacing it with an alternative, is the next most important step, so that new models can be trained.
+1. Enabling CUDA/CUDNN is an important priority, and now that the repository uses pyTorch instead of Torch, this upgrade should be relatively simple, though it must wait until my thesis is published.
+1. Migrating from using external binaries for calculating optical flow to using Python-integrated optical flow calculations will allow the optical flow files to be stored in memory instead of being written to disk. This is especially possible for the certs, which are quick enough to be computed on the fly.
+1. Fully recreating the training mechanisms of the core program, or replacing it with an alternative, is the next most important step, so that new models can be trained.
