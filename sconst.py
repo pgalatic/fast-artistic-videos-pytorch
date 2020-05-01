@@ -20,7 +20,7 @@ OUTPUT_PREFIX = 'out'
 OUTPUT_FORMAT = 'out-%05d.png'
 
 # The maximum number of threading jobs to run simultaneously.
-MAX_OPTFLOW_JOBS = 8
+MAX_OPTFLOW_JOBS = 2
 
 # This mean is used for preprocessing input to the stylization neural network.
 VGG_MEAN = [103.939, 116.779, 123.68]

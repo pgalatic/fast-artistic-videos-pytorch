@@ -274,7 +274,7 @@ class StylizationModel():
                 # out shape is (h, w, 3)
                 out = self.run_next_image(img, out, flow, cert)
                 if self.eval: crit.eval(img, out, (pout, flow, cert))
-                # Remove now-unnecessary files to save space.
+                # Remove now-unnecessary files to save space. TODO make optional.
                 os.remove(flowname)
                 os.remove(certname)
             
