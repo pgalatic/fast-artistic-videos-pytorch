@@ -1,9 +1,9 @@
 flowiz==2.3.1
-numpy==1.16.2
+numpy==1.17.3
 torchvision==0.5.0
-ffprobe3==0.1.2
 pandas==1.0.3
 torch==1.4.0
 opencv_python==4.2.0.32
 moviepy==1.0.2
 Pillow==7.1.1
+ffprobe3==0.1.2
