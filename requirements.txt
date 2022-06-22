@@ -1,5 +1,5 @@
 flowiz==2.3.1
-numpy==1.17.3
+numpy==1.22.0
 torchvision==0.5.0
 pandas==0.24.2
 torch==1.4.0
